@@ -303,11 +303,14 @@ und in Prompt sowie Fingerprint einbeziehen.
    Cursor-Status und setzt `error`.
 10. Nur bei Mode `c-work` nach Agent-Ende: Card-Kommentar
     `Cursor: Arbeit beendet` mit optionaler PR-/Branch-Zeile und
-    Ergebnistext. Anschließend MUSS die Bridge die Card unblocken
-    (`blocked=false`, `blocked_reason=null`). Fehlende Card-ID beim
-    Kommentar → fataler Fehler; API-Fehler bei Kommentar oder Unblock
-    behalten den Cursor-Status und setzen `error`.
-11. Delivery als verarbeitet markieren.
+    Ergebnistext. Fehlende Card-ID beim Kommentar → fataler Fehler;
+    reiner API-Post-Fehler behält den Cursor-Status und setzt `error`.
+11. Nach erfolgreichem Mode-Abschluss (Kommentar/Anhang bzw. Work-Ende)
+    MUSS die Bridge die Card unblocken (`blocked=false`,
+    `blocked_reason=null`) — für `c-ask`, `c-plan` und `c-work`.
+    Fehlende Card-ID oder API-Fehler beim Unblock behalten den
+    Cursor-Status und setzen `error`.
+12. Delivery als verarbeitet markieren.
 
 Bridge-Kommentare SOLLEN mit dem Präfix `Cursor:` beginnen.
 
@@ -318,8 +321,8 @@ Checklist-Items enthalten.
 
 | Mode | Auftrag an den Agenten |
 |---|---|
-| `c-ask` | Frage beantworten; Code lesen erlaubt; keine Implementierung, kein Plan; Antwort wird als `Cursor:`-Kommentar gepostet |
-| `c-plan` | konkreten Implementierungsplan erzeugen; noch nicht implementieren; Ergebnis wird als Anhang gepostet |
+| `c-ask` | Frage beantworten; Code lesen erlaubt; keine Implementierung, kein Plan; Antwort wird als `Cursor:`-Kommentar gepostet; Unblock nach Ende |
+| `c-plan` | konkreten Implementierungsplan erzeugen; noch nicht implementieren; Ergebnis wird als Anhang gepostet; Unblock nach Ende |
 | `c-work` | Card im Repo umsetzen; Start- und Ende-Kommentar mit `Cursor:`-Präfix; Unblock nach Ende |
 
 ## 7. Integrationen

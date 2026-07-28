@@ -372,14 +372,14 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
             logger.warning("work finished comment failed delivery_id=%s: %s", delivery_id, finish_error)
             return LabelDecision(False, mode=decision.mode, reason=run.error)
 
-        unblock_error = _unblock_card(client, card=card)
-        if unblock_error:
-            run.error = unblock_error[:500]
-            run.updated_at = utc_now()
-            inbound_webhooks.mark_processed(db, row, error=run.error)
-            db.commit()
-            logger.warning("work unblock failed delivery_id=%s: %s", delivery_id, unblock_error)
-            return LabelDecision(False, mode=decision.mode, reason=run.error)
+    unblock_error = _unblock_card(client, card=card)
+    if unblock_error:
+        run.error = unblock_error[:500]
+        run.updated_at = utc_now()
+        inbound_webhooks.mark_processed(db, row, error=run.error)
+        db.commit()
+        logger.warning("%s unblock failed delivery_id=%s: %s", decision.mode, delivery_id, unblock_error)
+        return LabelDecision(False, mode=decision.mode, reason=run.error)
 
     inbound_webhooks.mark_processed(db, row)
     db.commit()
@@ -423,7 +423,7 @@ def _block_card_for_mode(
 
 
 def _unblock_card(client: TanbanClient, *, card: dict[str, Any] | None) -> str | None:
-    """Clear TanBan card block after Cursor work. Return error or None."""
+    """Clear TanBan card block after Cursor finishes. Return error or None."""
     card_id = _card_numeric_id(card)
     if card_id is None:
         return "unblocking requires card id from board card lookup"

@@ -31,8 +31,8 @@ Bei `card_created` und `card_labels_changed`:
 2. Dieses Mode-Label wurde in diesem Event **hinzugefügt**?
 3. Card sperren mit Reason `cursor ask` / `cursor plan` / `cursor work`
 4. Wenn `CURSOR_ACTIVE=true` → Prompt an **Cursor Cloud** (`CURSOR_REPOSITORY`); sonst nur loggen
-5. Bei Mode **c-ask**: Agent-Antwort als Kommentar (`Cursor: …`)
-6. Bei Mode **c-plan**: Plan als Card-Anhang `cursor-plan-<UTC-Zeitstempel>.md`
+5. Bei Mode **c-ask**: Agent-Antwort als Kommentar (`Cursor: …`), danach Unblock
+6. Bei Mode **c-plan**: Plan als Card-Anhang `cursor-plan-<UTC-Zeitstempel>.md`, danach Unblock
 7. Bei Mode **c-work**: bald nach Start Kommentar `Cursor: Arbeit begonnen`
    (Branch-Link wenn schon bekannt, sonst Cursor-Agent-Link); nach Ende
    `Cursor: Arbeit beendet` (+ Zusammenfassung), danach Unblock
