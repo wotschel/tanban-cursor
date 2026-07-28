@@ -21,6 +21,7 @@ from services.label_rules import (
     evaluate_labels,
     normalize_label_names,
 )
+from services.tanban_boards import LegacyBoardBinding, TanbanBoardConfig
 from services.tanban_client import TanbanClient, TanbanClientError
 from utc_datetime import utc_now
 
@@ -52,18 +53,19 @@ def _added_labels(payload: dict[str, Any]) -> set[str]:
 def _resolve_card(
     client: TanbanClient,
     *,
+    board: TanbanBoardConfig | LegacyBoardBinding,
     card_public_id: str,
     payload: dict[str, Any],
     event: str,
 ) -> tuple[dict[str, Any] | None, set[str], str | None]:
     """Return (card_or_none, current_label_names, error)."""
-    if settings.tanban_board_id is not None:
+    if board.board_id is not None:
         try:
-            card = client.find_card_by_public_id(settings.tanban_board_id, card_public_id)
+            card = client.find_card_by_public_id(board.board_id, card_public_id)
         except TanbanClientError as error:
             return None, set(), str(error)
         if card is None:
-            return None, set(), f"card public_id={card_public_id} not found on board {settings.tanban_board_id}"
+            return None, set(), f"card public_id={card_public_id} not found on board {board.board_id}"
         names = normalize_label_names(
             [str(label.get("name") or "") for label in (card.get("labels") or []) if isinstance(label, dict)]
         )
@@ -72,7 +74,7 @@ def _resolve_card(
     # Fallback without board id: only card_created carries the full initial set in labels.added.
     if event == "card_created":
         return None, _added_labels(payload), None
-    return None, set(), "TANBAN_BOARD_ID is required to resolve labels for this event"
+    return None, set(), "board_id is required to resolve labels for this event"
 
 
 def _has_active_run(db: Session, *, card_public_id: str, mode: str) -> bool:
@@ -117,9 +119,17 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
         db.commit()
         return LabelDecision(False, reason="missing card public_id")
 
-    client = TanbanClient()
+    board = settings.resolve_board(row.board_public_id)
+    if board is None:
+        reason = f"no TanBan credentials configured for board public_id={row.board_public_id or '-'}"
+        inbound_webhooks.mark_processed(db, row, error=reason)
+        db.commit()
+        return LabelDecision(False, reason=reason)
+
+    client = TanbanClient(api_key=board.api_key)
     card, current_labels, resolve_error = _resolve_card(
         client,
+        board=board,
         card_public_id=card_public_id,
         payload=payload,
         event=event,
@@ -258,7 +268,7 @@ def _block_card_for_mode(
 ) -> str | None:
     """Mark the TanBan card blocked while Cursor works. Return error or None."""
     if not isinstance(card, dict) or card.get("id") is None:
-        return "blocking requires card id from TANBAN_BOARD_ID lookup"
+        return "blocking requires card id from board card lookup"
     try:
         card_id = int(card["id"])
     except (TypeError, ValueError):
@@ -285,7 +295,7 @@ def _post_ask_comment(
     if not result_text or not str(result_text).strip():
         return "ask mode produced no result text to post as comment", True
     if not isinstance(card, dict) or card.get("id") is None:
-        return "ask mode requires card id from TANBAN_BOARD_ID lookup to post comment", True
+        return "ask mode requires card id from board card lookup to post comment", True
     try:
         card_id = int(card["id"])
     except (TypeError, ValueError):

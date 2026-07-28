@@ -92,9 +92,11 @@ Umgebungsvariablen MÜSSEN Vorrang haben. `.env` DARF NICHT versioniert werden;
 | `DATABASE_URL` | ja | Compose setzt sie aus MariaDB-Variablen |
 | `APP_PORT` | nein | `8100` (Host-Mapping) |
 | `TANBAN_BASE_URL` | für Dispatch-Schreibzugriff | ohne trailing slash |
-| `TANBAN_API_KEY` | für Dispatch-Schreibzugriff | Board-API-Key `tbk_…` |
-| `TANBAN_BOARD_ID` | für Label-Auflösung / Block / Kommentar | positive ganze Zahl |
-| `TANBAN_WEBHOOK_SECRET` | empfohlen | `tbwh_…`; leer = Signaturprüfung aus (nur Dev) |
+| `TANBAN_BOARDS` | empfohlen (Multi-Board) | JSON-Objekt: `public_id` → `{board_id, api_key, webhook_secret}` |
+| `TANBAN_API_KEY` | Legacy Einzelboard | Board-API-Key `tbk_…` |
+| `TANBAN_BOARD_ID` | Legacy Einzelboard | positive ganze Zahl |
+| `TANBAN_BOARD_PUBLIC_ID` | Legacy mit Map-Eintrag | `board.public_id` aus Webhook-Payload |
+| `TANBAN_WEBHOOK_SECRET` | Legacy / Dev | `tbwh_…`; leer = Signaturprüfung aus (nur Dev) |
 | `CURSOR_ACTIVE` | nein | `false` |
 | `CURSOR_API_KEY` | wenn scharf | Cursor Dashboard |
 | `CURSOR_MODEL` | nein | `composer-2.5` |
@@ -102,7 +104,18 @@ Umgebungsvariablen MÜSSEN Vorrang haben. `.env` DARF NICHT versioniert werden;
 | `CURSOR_REPOSITORY` | wenn scharf | Repo-URL für Cloud-Agents |
 | `ACTIVITY_LOG_PATH` | nein | Log-Pfad im Container |
 
-Ungültige Werte (z. B. `CURSOR_RUNTIME`, `CURSOR_ACTIVE`, `TANBAN_BOARD_ID`)
+Wenn `TANBAN_BOARDS` gesetzt ist, MUSS es ein nicht-leeres JSON-Objekt sein.
+Jedes Board in der Map MUSS eine positive `board_id` haben. Die Bridge MUSS
+Credentials über `payload.board.public_id` auflösen (TanBan-API-Keys und
+Webhook-Secrets sind pro Board).
+
+Legacy: sind nur `TANBAN_BOARD_ID` / `TANBAN_API_KEY` / `TANBAN_WEBHOOK_SECRET`
+gesetzt und `TANBAN_BOARDS` leer, KANN die Bridge im Einzelboard-Modus alle
+Signaturen gegen dieses eine Secret prüfen und dieses eine `board_id` für
+Card-Lookups verwenden. Mit zusätzlich `TANBAN_BOARD_PUBLIC_ID` SOLL daraus
+ein normaler Map-Eintrag werden.
+
+Ungültige Werte (z. B. `CURSOR_RUNTIME`, `CURSOR_ACTIVE`, `TANBAN_BOARDS`)
 MÜSSEN beim Start mit klarer Fehlermeldung abgelehnt werden.
 
 In Compose MÜSSEN `MARIADB_PASSWORD`, `MARIADB_ROOT_PASSWORD` und `SECRET_KEY`
@@ -157,9 +170,11 @@ TanBan signiert mit HMAC-SHA256 über den Raw-Body:
 - Event: `X-TanBan-Event`
 - Delivery: `X-TanBan-Delivery`
 
-Wenn `TANBAN_WEBHOOK_SECRET` gesetzt ist, MUSS die Bridge die Signatur mit
-konstantzeitigem Vergleich prüfen und bei Fehlschlag mit `401` ablehnen.
-Wenn das Secret leer ist, KANN die Prüfung entfallen (nur Entwicklung).
+Wenn mindestens ein Webhook-Secret konfiguriert ist, MUSS die Bridge die
+Signatur mit konstantzeitigem Vergleich prüfen und bei Fehlschlag mit `401`
+ablehnen. Bei Multi-Board-Map MUSS das Secret zum `board.public_id` im Body
+passen; unbekannte Boards MÜSSEN mit `401` abgelehnt werden. Wenn kein Secret
+konfiguriert ist, KANN die Prüfung entfallen (nur Entwicklung).
 
 Fehlende Delivery-ID oder Event-Name MUSS zu `400` führen.
 Ungültiges JSON MUSS zu `400` führen.
@@ -207,15 +222,19 @@ Label-Vergleiche MÜSSEN case-insensitive und getrimmt erfolgen.
 
 ### 6.3 Card-/Label-Auflösung
 
-Wenn `TANBAN_BOARD_ID` gesetzt ist, MUSS die Bridge die Card über die TanBan
-Board-API per `public_id` laden und aktuelle Labels sowie numerische `id`
-verwenden (nötig für Blocken und Kommentare).
+Die Bridge MUSS das Board über `payload.board.public_id` gegen die
+konfigurierte Board-Map (oder Legacy-Einzelboard) auflösen. Ohne Credentials
+für dieses Board MUSS der Dispatch übersprungen werden.
 
-Ohne `TANBAN_BOARD_ID`:
+Mit bekannter numerischer `board_id` MUSS die Bridge die Card über die TanBan
+Board-API per Card-`public_id` laden und aktuelle Labels sowie numerische `id`
+verwenden (nötig für Blocken und Kommentare). Der Board-API-Key des
+aufgelösten Boards MUSS verwendet werden.
+
+Ohne `board_id`:
 
 - bei `card_created` KANN auf `labels.added` im Payload zurückgefallen werden;
-- bei `card_labels_changed` MUSS mit Fehler übersprungen werden
-  (`TANBAN_BOARD_ID` erforderlich).
+- bei `card_labels_changed` MUSS mit Fehler übersprungen werden.
 
 ### 6.4 Deduplizierung aktiver Runs
 

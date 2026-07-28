@@ -38,17 +38,30 @@ Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppel
 
 ## Konfiguration
 
+Mehrere Boards mit `c-ask` / `c-plan` / `c-work` können dieselbe Bridge nutzen.
+TanBan-Keys und Webhook-Secrets sind **pro Board** — deshalb eine Map:
+
 | Variable | Zweck |
 |---|---|
 | `TANBAN_BASE_URL` | Basis-URL der TanBan-Instanz |
-| `TANBAN_API_KEY` | Board-API-Key (`tbk_…`), Scope i.d.R. `read_write` |
-| `TANBAN_BOARD_ID` | Numerische Board-ID (Label-Auflösung über `/api/cards`) |
-| `TANBAN_WEBHOOK_SECRET` | Signing-Secret aus `webhook-create` (`tbwh_…`) |
+| `TANBAN_BOARDS` | JSON: `board.public_id` → `{board_id, api_key, webhook_secret}` |
+| `TANBAN_API_KEY` | Legacy Einzelboard: Board-API-Key (`tbk_…`, `read_write`) |
+| `TANBAN_BOARD_ID` | Legacy: numerische Board-ID |
+| `TANBAN_BOARD_PUBLIC_ID` | Legacy: `board.public_id` (macht Legacy zum Map-Eintrag) |
+| `TANBAN_WEBHOOK_SECRET` | Legacy: Signing-Secret (`tbwh_…`) |
 | `CURSOR_ACTIVE` | `true` = scharf (an Cursor senden); `false` = nur loggen |
 | `CURSOR_API_KEY` | Cursor API-Key (Dashboard → Integrations) |
 | `CURSOR_MODEL` | z.B. `composer-2.5` |
 | `CURSOR_REPOSITORY` | Repo-URL für Cloud-Agents |
 | `CURSOR_RUNTIME` | `cloud` (Dispatch erzwingt cloud) |
+
+`TANBAN_BOARDS` (einzeilig), Beispiel:
+
+```bash
+TANBAN_BOARDS={"<public_id_a>":{"board_id":3,"api_key":"tbk_…","webhook_secret":"tbwh_…"},"<public_id_b>":{"board_id":4,"api_key":"tbk_…","webhook_secret":"tbwh_…"}}
+```
+
+Unbekannte `board.public_id` in der Map → Webhook-Signatur **401**.
 
 ## Endpunkte
 
@@ -71,10 +84,13 @@ hängen — sonst kann TanBan den Hostnamen `tanban-cursor` nicht auflösen.
 docker network create tanban-shared   # einmalig
 cd /opt/tanban
 docker compose up --detach --wait     # nach compose-Änderung: recreate app
+# pro Board: API-Key + Webhook (gleiche Bridge-URL)
+docker compose exec app python manage.py board-api-key-create <board_id> \
+  --name cursor-bridge --scope read_write --actor <admin>
 docker compose exec app python manage.py webhook-create <board_id> \
   --name cursor-bridge \
   --url http://tanban-cursor:8000/webhooks/tanban
-# Secret (tbwh_…) in tanban-cursor .env als TANBAN_WEBHOOK_SECRET setzen
+# public_id, board_id, tbk_… und tbwh_… in TANBAN_BOARDS der Bridge eintragen
 ```
 
 Host-Cron auf TanBan weiter nutzen (`webhook-deliver`), damit Events ankommen.
@@ -99,5 +115,5 @@ cd /opt/tanban-cursor && docker compose logs -f app
 ## Nächste Schritte
 
 1. Ergebnis zurück nach TanBan auch für `c-plan` / `c-work` (Kommentar / Card-Update)
-2. Labels `c-ask` / `c-plan` / `c-work` am Board anlegen
-3. `CURSOR_API_KEY`, `CURSOR_REPOSITORY`, `TANBAN_BOARD_ID` in `.env` setzen
+2. Labels `c-ask` / `c-plan` / `c-work` auf jedem gewünschten Board anlegen
+3. `CURSOR_API_KEY`, `CURSOR_REPOSITORY`, `TANBAN_BOARDS` in `.env` setzen
