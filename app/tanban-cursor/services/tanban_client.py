@@ -84,3 +84,9 @@ class TanbanClient:
 
     def add_comment(self, card_id: int, text: str) -> Any:
         return self.post(f"/api/cards/{card_id}/comments", json={"text": text})
+
+    def set_card_blocked(self, card_id: int, *, reason: str) -> Any:
+        return self.patch(
+            f"/api/cards/{card_id}",
+            json={"blocked": True, "blocked_reason": reason},
+        )

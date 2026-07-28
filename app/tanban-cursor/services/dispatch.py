@@ -14,7 +14,9 @@ from services import inbound_webhooks
 from services.cursor_client import CursorClient, CursorClientError
 from services.label_rules import (
     DISPATCH_EVENTS,
+    LABEL_ASK,
     LabelDecision,
+    blocked_reason_for_mode,
     build_prompt,
     evaluate_labels,
     normalize_label_names,
@@ -164,6 +166,21 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     db.add(run)
     db.flush()
 
+    if not settings.cursor_active:
+        run.status = "skipped"
+        run.error = "CURSOR_ACTIVE is false (dry-run)"
+        inbound_webhooks.mark_processed(db, row)
+        db.commit()
+        logger.info(
+            "CURSOR_ACTIVE=false dry-run mode=%s delivery_id=%s card=%s title=%r prompt_chars=%s",
+            decision.mode,
+            delivery_id,
+            card_public_id,
+            title,
+            len(prompt),
+        )
+        return LabelDecision(False, mode=decision.mode, reason=run.error)
+
     if not settings.cursor_api_key:
         run.status = "skipped"
         run.error = "CURSOR_API_KEY is not configured"
@@ -176,6 +193,16 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
         run.error = "CURSOR_REPOSITORY is not configured"
         inbound_webhooks.mark_processed(db, row, error=run.error)
         db.commit()
+        return LabelDecision(False, mode=decision.mode, reason=run.error)
+
+    block_error = _block_card_for_mode(client, card=card, mode=decision.mode)
+    if block_error:
+        run.status = "error"
+        run.error = block_error[:500]
+        run.updated_at = utc_now()
+        inbound_webhooks.mark_processed(db, row, error=run.error)
+        db.commit()
+        logger.warning("card block failed delivery_id=%s: %s", delivery_id, block_error)
         return LabelDecision(False, mode=decision.mode, reason=run.error)
 
     run.status = "running"
@@ -197,6 +224,19 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     run.status = result.status or "finished"
     run.result_text = result.result_text
     run.updated_at = utc_now()
+
+    if decision.mode == LABEL_ASK:
+        comment_error, fatal = _post_ask_comment(client, card=card, result_text=result.result_text)
+        if comment_error:
+            run.error = comment_error[:500]
+            if fatal:
+                run.status = "error"
+            run.updated_at = utc_now()
+            inbound_webhooks.mark_processed(db, row, error=run.error)
+            db.commit()
+            logger.warning("ask comment failed delivery_id=%s: %s", delivery_id, comment_error)
+            return LabelDecision(False, mode=decision.mode, reason=run.error)
+
     inbound_webhooks.mark_processed(db, row)
     db.commit()
     logger.info(
@@ -208,3 +248,52 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
         run.status,
     )
     return decision
+
+
+def _block_card_for_mode(
+    client: TanbanClient,
+    *,
+    card: dict[str, Any] | None,
+    mode: str,
+) -> str | None:
+    """Mark the TanBan card blocked while Cursor works. Return error or None."""
+    if not isinstance(card, dict) or card.get("id") is None:
+        return "blocking requires card id from TANBAN_BOARD_ID lookup"
+    try:
+        card_id = int(card["id"])
+    except (TypeError, ValueError):
+        return f"blocking got invalid card id: {card.get('id')!r}"
+    reason = blocked_reason_for_mode(mode)
+    try:
+        client.set_card_blocked(card_id, reason=reason)
+    except TanbanClientError as error:
+        return str(error)
+    return None
+
+
+def _post_ask_comment(
+    client: TanbanClient,
+    *,
+    card: dict[str, Any] | None,
+    result_text: str | None,
+) -> tuple[str | None, bool]:
+    """Post ask result as a TanBan card comment.
+
+    Returns ``(error_message_or_none, fatal)``. ``fatal`` means the run should be
+    marked ``error`` (missing text/card id); API post failures keep Cursor status.
+    """
+    if not result_text or not str(result_text).strip():
+        return "ask mode produced no result text to post as comment", True
+    if not isinstance(card, dict) or card.get("id") is None:
+        return "ask mode requires card id from TANBAN_BOARD_ID lookup to post comment", True
+    try:
+        card_id = int(card["id"])
+    except (TypeError, ValueError):
+        return f"ask mode got invalid card id: {card.get('id')!r}", True
+    text = f"Cursor ask:\n\n{str(result_text).strip()}"
+    try:
+        client.add_comment(card_id, text)
+    except TanbanClientError as error:
+        return str(error), False
+    return None, False
+

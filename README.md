@@ -27,12 +27,13 @@ Port default: `8100` (damit er nicht mit TanBan auf `8000` kollidiert).
 
 Bei `card_created` und `card_labels_changed`:
 
-1. Label **cursor** gesetzt?
-2. Zusätzlich **plan** oder **work** gesetzt? (`work` hat Vorrang)
-3. Mindestens eines dieser Labels wurde in diesem Event **hinzugefügt**?
-4. → Prompt an **Cursor Cloud** (`CURSOR_REPOSITORY`)
+1. Label **c-ask**, **c-plan** oder **c-work** gesetzt? (Priorität: `c-work` > `c-plan` > `c-ask`)
+2. Dieses Mode-Label wurde in diesem Event **hinzugefügt**?
+3. Card sperren mit Reason `cursor ask` / `cursor plan` / `cursor work`
+4. Wenn `CURSOR_ACTIVE=true` → Prompt an **Cursor Cloud** (`CURSOR_REPOSITORY`); sonst nur loggen
+5. Bei Mode **c-ask**: Agent-Antwort als Kommentar auf die Card
 
-Unrelated Label-Änderungen bei bereits gesetztem Combo lösen keinen neuen Run aus.
+Unrelated Label-Änderungen bei bereits gesetztem Mode lösen keinen neuen Run aus.
 Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppelt.
 
 ## Konfiguration
@@ -43,6 +44,7 @@ Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppel
 | `TANBAN_API_KEY` | Board-API-Key (`tbk_…`), Scope i.d.R. `read_write` |
 | `TANBAN_BOARD_ID` | Numerische Board-ID (Label-Auflösung über `/api/cards`) |
 | `TANBAN_WEBHOOK_SECRET` | Signing-Secret aus `webhook-create` (`tbwh_…`) |
+| `CURSOR_ACTIVE` | `true` = scharf (an Cursor senden); `false` = nur loggen |
 | `CURSOR_API_KEY` | Cursor API-Key (Dashboard → Integrations) |
 | `CURSOR_MODEL` | z.B. `composer-2.5` |
 | `CURSOR_REPOSITORY` | Repo-URL für Cloud-Agents |
@@ -81,6 +83,6 @@ Host-Cron auf TanBan weiter nutzen (`webhook-deliver`), damit Events ankommen.
 
 ## Nächste Schritte
 
-1. Ergebnis zurück nach TanBan (Kommentar / Card-Update via Board-API)
-2. Labels `cursor` / `plan` / `work` am Board anlegen
+1. Ergebnis zurück nach TanBan auch für `c-plan` / `c-work` (Kommentar / Card-Update)
+2. Labels `c-ask` / `c-plan` / `c-work` am Board anlegen
 3. `CURSOR_API_KEY`, `CURSOR_REPOSITORY`, `TANBAN_BOARD_ID` in `.env` setzen

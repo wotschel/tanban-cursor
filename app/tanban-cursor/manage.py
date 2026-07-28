@@ -29,6 +29,7 @@ def cmd_health(_args: argparse.Namespace) -> int:
     print(f"tanban_api_key={'set' if settings.tanban_api_key else 'unset'}")
     print(f"tanban_board_id={settings.tanban_board_id or '(unset)'}")
     print(f"tanban_webhook_secret={'set' if settings.tanban_webhook_secret else 'unset'}")
+    print(f"cursor_active={settings.cursor_active}")
     print(f"cursor_api_key={'set' if settings.cursor_api_key else 'unset'}")
     print(f"cursor_model={settings.cursor_model}")
     print(f"cursor_runtime={settings.cursor_runtime}")

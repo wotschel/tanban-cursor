@@ -46,6 +46,7 @@ class Settings:
     tanban_api_key: str
     tanban_webhook_secret: str
     tanban_board_id: int | None
+    cursor_active: bool
     cursor_api_key: str
     cursor_model: str
     cursor_runtime: str
@@ -75,6 +76,8 @@ def load_settings() -> Settings:
     if cursor_runtime not in CURSOR_RUNTIMES:
         raise RuntimeError("CURSOR_RUNTIME must be cloud or local")
 
+    cursor_active_raw = (os.environ.get("CURSOR_ACTIVE") or "false").strip() or "false"
+
     return Settings(
         app_env=app_env,
         secret_key=secret_key,
@@ -83,6 +86,7 @@ def load_settings() -> Settings:
         tanban_api_key=(os.environ.get("TANBAN_API_KEY") or "").strip(),
         tanban_webhook_secret=(os.environ.get("TANBAN_WEBHOOK_SECRET") or "").strip(),
         tanban_board_id=parse_optional_positive_int("TANBAN_BOARD_ID", os.environ.get("TANBAN_BOARD_ID")),
+        cursor_active=parse_bool("CURSOR_ACTIVE", cursor_active_raw),
         cursor_api_key=(os.environ.get("CURSOR_API_KEY") or "").strip(),
         cursor_model=(os.environ.get("CURSOR_MODEL") or "composer-2.5").strip() or "composer-2.5",
         cursor_runtime=cursor_runtime,
