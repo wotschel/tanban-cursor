@@ -33,8 +33,9 @@ Bei `card_created` und `card_labels_changed`:
 4. Wenn `CURSOR_ACTIVE=true` → Prompt an **Cursor Cloud** (`CURSOR_REPOSITORY`); sonst nur loggen
 5. Bei Mode **c-ask**: Agent-Antwort als Kommentar (`Cursor: …`)
 6. Bei Mode **c-plan**: Plan als Card-Anhang `cursor-plan-<UTC-Zeitstempel>.md`
-7. Bei Mode **c-work**: Kommentar `Cursor: Arbeit begonnen` mit Branch-Link,
-   nach Ende `Cursor: Arbeit beendet` (+ Zusammenfassung), danach Unblock
+7. Bei Mode **c-work**: bald nach Start Kommentar `Cursor: Arbeit begonnen`
+   (Branch-Link wenn schon bekannt, sonst Cursor-Agent-Link); nach Ende
+   `Cursor: Arbeit beendet` (+ Zusammenfassung), danach Unblock
 
 Unrelated Label-Änderungen bei bereits gesetztem Mode lösen keinen neuen Run aus.
 Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppelt.

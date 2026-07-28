@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -202,14 +202,14 @@ class CursorClient:
         on_launch: Callable[[str, str | None], None] | None = None,
         on_started: Callable[[AgentStartInfo], None] | None = None,
         branch_poll_interval_s: float = 2.0,
+        early_branch_timeout_s: float = 12.0,
     ) -> AgentLaunchResult:
-        """Create a cloud agent for c-work, notify when a branch exists, then wait.
+        """Create a cloud agent for c-work, post start promptly, then wait.
 
         ``on_launch`` runs on the caller thread right after ``send`` (agent/run ids).
-        ``on_started`` is called at most once: as soon as ``git.branches`` is visible
-        while the run is active, or as a fallback after ``wait()`` (branch and/or
-        agent URL). It may run on a background poller thread — keep it free of
-        shared SQLAlchemy sessions.
+        ``on_started`` is called at most once on the caller thread: after a short
+        poll for ``git.branches`` (prefer branch link), otherwise immediately with
+        the Cursor agent URL so TanBan gets a start comment before the long wait.
         """
         api_key = self._require_key()
         if self.runtime != "cloud":
@@ -222,15 +222,13 @@ class CursorClient:
         except ImportError as error:
             raise CursorClientError("cursor-sdk is not installed") from error
 
-        started_lock = threading.Lock()
         started_sent = False
 
         def notify(info: AgentStartInfo) -> None:
             nonlocal started_sent
-            with started_lock:
-                if started_sent:
-                    return
-                started_sent = True
+            if started_sent:
+                return
+            started_sent = True
             if on_started is None:
                 return
             try:
@@ -253,44 +251,51 @@ class CursorClient:
                     except Exception:  # noqa: BLE001 — launch bookkeeping must not abort the agent
                         logger.exception("on_launch callback failed agent_id=%s", agent_id)
 
-                stop = threading.Event()
-
-                def poll_for_branch() -> None:
-                    while not stop.wait(branch_poll_interval_s):
-                        with started_lock:
-                            if started_sent:
-                                return
-                        try:
-                            live = Agent.get_run(str(run_id)) if run_id else None
-                            git = getattr(live, "git", None) if live is not None else None
-                            branch, repo_hint, pr_url = _first_branch_info(git)
-                            if not branch:
-                                continue
-                            branch_url = branch_browse_url(repo_hint or repository, branch) or None
-                            notify(
-                                AgentStartInfo(
-                                    agent_id=agent_id,
-                                    run_id=run_id,
-                                    agent_url=agent_web_url(agent_id),
-                                    branch=branch,
-                                    branch_url=branch_url,
-                                    pr_url=pr_url,
-                                )
+                # Prefer a branch link when the SDK exposes one quickly; otherwise
+                # post the agent URL so the start comment is not delayed until wait().
+                deadline = time.monotonic() + max(0.0, early_branch_timeout_s)
+                while time.monotonic() < deadline and not started_sent:
+                    branch = None
+                    repo_hint = None
+                    pr_url = None
+                    try:
+                        live = Agent.get_run(str(run_id)) if run_id else None
+                        git = getattr(live, "git", None) if live is not None else None
+                        branch, repo_hint, pr_url = _first_branch_info(git)
+                    except Exception:  # noqa: BLE001 — GetRun often fails early; keep trying briefly
+                        logger.debug("early branch poll failed run_id=%s", run_id, exc_info=True)
+                    if branch:
+                        branch_url = branch_browse_url(repo_hint or repository, branch) or None
+                        notify(
+                            AgentStartInfo(
+                                agent_id=agent_id,
+                                run_id=run_id,
+                                agent_url=agent_web_url(agent_id),
+                                branch=branch,
+                                branch_url=branch_url,
+                                pr_url=pr_url,
                             )
-                            return
-                        except Exception:  # noqa: BLE001 — keep polling until wait ends
-                            logger.debug("branch poll failed run_id=%s", run_id, exc_info=True)
+                        )
+                        break
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(branch_poll_interval_s, remaining))
 
-                poller = threading.Thread(target=poll_for_branch, name="cursor-branch-poll", daemon=True)
-                poller.start()
-                try:
-                    result = cursor_run.wait()
-                finally:
-                    stop.set()
-                    poller.join(timeout=max(branch_poll_interval_s * 2, 5.0))
+                if not started_sent:
+                    notify(
+                        AgentStartInfo(
+                            agent_id=agent_id,
+                            run_id=run_id,
+                            agent_url=agent_web_url(agent_id),
+                        )
+                    )
+
+                result = cursor_run.wait()
 
                 branch, repo_hint, pr_url = _first_branch_info(getattr(result, "git", None))
                 branch_url = branch_browse_url(repo_hint or repository, branch) if branch else None
+                # Safety net if start notify somehow did not run before wait().
                 notify(
                     AgentStartInfo(
                         agent_id=str(result.agent_id or agent_id),

@@ -290,14 +290,14 @@ und in Prompt sowie Fingerprint einbeziehen.
    oder fehlende Card-ID → fataler Fehler; reiner API-Upload-Fehler behält
    den Cursor-Status und setzt `error`.
 9. Nur bei Mode `c-work`: Cloud-Agent per `Agent.create` + `send` starten
-   (`auto_create_pr=true`). Sobald `git.branches` verfügbar ist (Polling
-   während des Laufs, sonst nach `wait()`), MUSS die Bridge einen Card-
-   Kommentar posten:
+   (`auto_create_pr=true`). Die Bridge MUSS zeitnah nach dem Start einen
+   Card-Kommentar posten (vor dem langen `wait()`): zuerst kurz auf
+   `git.branches` pollen (Branch-Link bevorzugen), sonst Fallback
+   `Cursor: Arbeit begonnen: [Cursor Agent](https://cursor.com/agents/<id>)`.
+   Mit Branch:
    `Cursor: Arbeit begonnen: [<branch>](<repo>/tree/<urlencoded-branch>)`.
-   Fehlt der Branch, SOLL stattdessen ein Link auf den Cursor-Agent
-   (`https://cursor.com/agents/<id>`) gesetzt werden. Fehlende Card-ID →
-   fataler Fehler; reiner API-Post-Fehler behält den Cursor-Status und setzt
-   `error`.
+   Fehlende Card-ID → fataler Fehler; reiner API-Post-Fehler behält den
+   Cursor-Status und setzt `error`.
 10. Nur bei Mode `c-work` nach Agent-Ende: Card-Kommentar
     `Cursor: Arbeit beendet` mit optionaler PR-/Branch-Zeile und
     Ergebnistext. Anschließend MUSS die Bridge die Card unblocken
@@ -395,9 +395,9 @@ Weitere Integrationstests KANNEN ergänzt werden.
 Diese Punkte sind bewusst noch nicht Soll der v1.0-Kernpflicht:
 
 1. Asynchrones Polling/Webhooks von Cursor-Läufen für `c-ask` / `c-plan`
-   (heute: synchrone `prompt_once`-Semantik im Hintergrund-Task; `c-work`
-   pollt den Branch parallel zum `wait()`).
+   (heute: synchrone `prompt_once`-Semantik im Hintergrund-Task).
 2. Board-Labels `c-ask` / `c-plan` / `c-work` sind in TanBan manuell
    anzulegen; die Bridge erzeugt sie nicht.
 3. Frühes Branch-Polling über SDK `GetRun` kann fehlschlagen; der
-   Start-Kommentar fällt dann auf das Ergebnis nach `wait()` zurück.
+   Start-Kommentar nutzt dann den Agent-Link (vor `wait()`), Branch/PR
+   stehen im Ende-Kommentar.

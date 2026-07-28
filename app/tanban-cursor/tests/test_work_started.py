@@ -105,3 +105,134 @@ def test_post_work_started_comment_api_error_not_fatal():
     err, fatal = _post_work_started_comment(client, card={"id": 1}, info=info)
     assert err == "boom"
     assert fatal is False
+
+
+def test_prompt_work_posts_start_before_wait(monkeypatch):
+    """Start callback must run before wait() returns (agent-link fallback)."""
+    from services.cursor_client import CursorClient
+
+    events: list[str] = []
+
+    class FakeRun:
+        id = "run-1"
+        agent_id = "bc-1"
+        status = "finished"
+        result = "done"
+        git = None
+
+        def wait(self):
+            events.append("wait")
+            return self
+
+    class FakeAgent:
+        agent_id = "bc-1"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def send(self, _prompt):
+            events.append("send")
+            return FakeRun()
+
+    class FakeAgentModule:
+        @staticmethod
+        def create(**_kwargs):
+            return FakeAgent()
+
+        @staticmethod
+        def get_run(_run_id):
+            raise RuntimeError("get_run unavailable")
+
+    monkeypatch.setitem(__import__("sys").modules, "cursor_sdk", MagicMock(Agent=FakeAgentModule))
+    # CursorClient imports Agent from cursor_sdk inside the method
+    import services.cursor_client as cursor_mod
+
+    monkeypatch.setattr(
+        cursor_mod,
+        "settings",
+        MagicMock(cursor_api_key="k", cursor_model="m", cursor_runtime="cloud"),
+    )
+
+    client = CursorClient(api_key="k", model="m", runtime="cloud")
+
+    def on_started(_info):
+        events.append("started")
+
+    result = client.prompt_work(
+        "do it",
+        repository="https://github.com/org/repo",
+        on_started=on_started,
+        early_branch_timeout_s=0.0,
+        branch_poll_interval_s=0.01,
+    )
+
+    assert events == ["send", "started", "wait"]
+    assert result.status == "finished"
+    assert result.agent_id == "bc-1"
+
+
+def test_prompt_work_prefers_early_branch(monkeypatch):
+    from types import SimpleNamespace
+
+    from services.cursor_client import CursorClient
+    import services.cursor_client as cursor_mod
+
+    started: list = []
+
+    class FakeRun:
+        id = "run-1"
+        agent_id = "bc-1"
+        status = "finished"
+        result = "done"
+        git = SimpleNamespace(branches=[SimpleNamespace(branch="cursor/x", repo_url=None, pr_url=None)])
+
+        def wait(self):
+            return self
+
+    class FakeAgent:
+        agent_id = "bc-1"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def send(self, _prompt):
+            return FakeRun()
+
+    class FakeAgentModule:
+        @staticmethod
+        def create(**_kwargs):
+            return FakeAgent()
+
+        @staticmethod
+        def get_run(_run_id):
+            return SimpleNamespace(
+                git=SimpleNamespace(
+                    branches=[{"branch": "cursor/x", "repo_url": "https://github.com/org/repo"}]
+                )
+            )
+
+    monkeypatch.setitem(__import__("sys").modules, "cursor_sdk", MagicMock(Agent=FakeAgentModule))
+    monkeypatch.setattr(
+        cursor_mod,
+        "settings",
+        MagicMock(cursor_api_key="k", cursor_model="m", cursor_runtime="cloud"),
+    )
+
+    client = CursorClient(api_key="k", model="m", runtime="cloud")
+    client.prompt_work(
+        "do it",
+        repository="https://github.com/org/repo",
+        on_started=lambda info: started.append(info),
+        early_branch_timeout_s=1.0,
+        branch_poll_interval_s=0.01,
+    )
+
+    assert len(started) == 1
+    assert started[0].branch == "cursor/x"
+    assert started[0].branch_url is not None
