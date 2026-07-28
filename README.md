@@ -63,15 +63,25 @@ TanBan signiert mit `X-TanBan-Signature: sha256=…` sowie
 
 ### Webhook in TanBan eintragen
 
+Beide Stacks teilen das Docker-Netzwerk `tanban-shared` (Alias `tanban-cursor`).
+
 ```bash
+docker network create tanban-shared   # einmalig
 cd /opt/tanban
+docker compose up --detach --wait
 docker compose exec app python manage.py webhook-create <board_id> \
   --name cursor-bridge \
-  --url http://host.docker.internal:8100/webhooks/tanban
+  --url http://tanban-cursor:8000/webhooks/tanban
 # Secret (tbwh_…) in tanban-cursor .env als TANBAN_WEBHOOK_SECRET setzen
 ```
 
 Host-Cron auf TanBan weiter nutzen (`webhook-deliver`), damit Events ankommen.
+
+Logs der eingehenden Events:
+
+```bash
+cd /opt/tanban-cursor && docker compose logs -f app
+```
 
 ## CLI
 

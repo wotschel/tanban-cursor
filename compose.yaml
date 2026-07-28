@@ -69,10 +69,16 @@ services:
       retries: 6
       start_period: 20s
     networks:
-      - frontend
-      - backend
+      frontend:
+      backend:
+      shared:
+        aliases:
+          - tanban-cursor
 
 networks:
   frontend:
   backend:
     internal: true
+  shared:
+    external: true
+    name: tanban-shared

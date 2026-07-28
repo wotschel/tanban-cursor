@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -8,8 +9,18 @@ from config import settings
 from routers import webhooks as webhook_routes
 
 
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s:%(name)s:%(message)s",
+        force=True,
+    )
+    logging.getLogger("tanban-cursor").setLevel(logging.INFO)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _configure_logging()
     yield
 
 

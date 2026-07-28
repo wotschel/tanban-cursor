@@ -24,6 +24,30 @@ def _process_delivery_background(delivery_id: str) -> None:
         db.close()
 
 
+def _log_inbound_event(*, event: str, delivery_id: str, payload: dict, duplicate: bool) -> None:
+    board = payload.get("board") if isinstance(payload.get("board"), dict) else {}
+    obj = payload.get("object") if isinstance(payload.get("object"), dict) else {}
+    labels = payload.get("labels") if isinstance(payload.get("labels"), dict) else {}
+    logger.info(
+        "tanban webhook event=%s delivery_id=%s duplicate=%s board=%s object_type=%s object=%s "
+        "object_label=%r labels_added=%s labels_removed=%s",
+        event,
+        delivery_id,
+        duplicate,
+        board.get("public_id") or board.get("name") or "-",
+        obj.get("type") or "-",
+        obj.get("public_id") or "-",
+        obj.get("label") or obj.get("title") or "",
+        labels.get("added") or [],
+        labels.get("removed") or [],
+    )
+    logger.info(
+        "tanban webhook payload delivery_id=%s %s",
+        delivery_id,
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+    )
+
+
 @router.post("/webhooks/tanban", response_model=schemas.TanbanWebhookAck)
 def receive_tanban_webhook(
     background_tasks: BackgroundTasks,
@@ -52,8 +76,8 @@ def receive_tanban_webhook(
         payload=payload,
     )
     db.commit()
+    _log_inbound_event(event=event, delivery_id=delivery_id, payload=payload, duplicate=duplicate)
     if not duplicate:
-        logger.info("accepted webhook event=%s delivery_id=%s", event, delivery_id)
         background_tasks.add_task(_process_delivery_background, delivery_id)
     return schemas.TanbanWebhookAck(
         status="ok",
