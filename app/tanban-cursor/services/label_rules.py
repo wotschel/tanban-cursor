@@ -199,6 +199,7 @@ def build_prompt(
         )
     return (
         "Implement this TanBan card in the repository. "
-        "Make focused changes, keep the diff small, and summarize what you did.\n\n"
+        "Make focused changes, keep the diff small, and summarize what you did. "
+        "Push to the cloud agent branch so the ticket can link to it.\n\n"
         f"{card_block}"
     )

@@ -12,11 +12,17 @@ from sqlalchemy.orm import Session
 from config import settings
 from models import CursorAgentRun, InboundWebhookEvent
 from services import inbound_webhooks
-from services.cursor_client import CursorClient, CursorClientError
+from services.cursor_client import (
+    AgentStartInfo,
+    CursorClient,
+    CursorClientError,
+    work_started_comment_text,
+)
 from services.label_rules import (
     DISPATCH_EVENTS,
     LABEL_ASK,
     LABEL_PLAN,
+    LABEL_WORK,
     LabelDecision,
     blocked_reason_for_mode,
     build_prompt,
@@ -282,8 +288,33 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     run.status = "running"
     db.commit()
 
+    work_started_error: str | None = None
+
+    def _on_work_launch(agent_id: str, run_id: str | None) -> None:
+        run.cursor_agent_id = agent_id
+        if run_id:
+            run.cursor_run_id = run_id
+        run.updated_at = utc_now()
+        db.commit()
+
+    def _on_work_started(info: AgentStartInfo) -> None:
+        nonlocal work_started_error
+        comment_error, _fatal = _post_work_started_comment(client, card=card, info=info)
+        if comment_error:
+            work_started_error = comment_error
+            logger.warning("work started comment failed delivery_id=%s: %s", delivery_id, comment_error)
+
     try:
-        result = CursorClient(runtime="cloud").prompt_once(prompt, repository=settings.cursor_repository)
+        cursor = CursorClient(runtime="cloud")
+        if decision.mode == LABEL_WORK:
+            result = cursor.prompt_work(
+                prompt,
+                repository=settings.cursor_repository,
+                on_launch=_on_work_launch,
+                on_started=_on_work_started,
+            )
+        else:
+            result = cursor.prompt_once(prompt, repository=settings.cursor_repository)
     except CursorClientError as error:
         run.status = "error"
         run.error = str(error)[:500]
@@ -293,11 +324,13 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
         logger.exception("Cursor launch failed delivery_id=%s", delivery_id)
         return LabelDecision(False, mode=decision.mode, reason=run.error)
 
-    run.cursor_agent_id = result.agent_id
-    run.cursor_run_id = result.run_id
+    run.cursor_agent_id = result.agent_id or run.cursor_agent_id
+    run.cursor_run_id = result.run_id or run.cursor_run_id
     run.status = result.status or "finished"
     run.result_text = result.result_text
     run.updated_at = utc_now()
+    if work_started_error and not run.error:
+        run.error = work_started_error[:500]
 
     if decision.mode == LABEL_ASK:
         comment_error, fatal = _post_ask_comment(client, card=card, result_text=result.result_text)
@@ -326,12 +359,13 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     inbound_webhooks.mark_processed(db, row)
     db.commit()
     logger.info(
-        "launched cursor mode=%s delivery_id=%s agent=%s run=%s status=%s",
+        "launched cursor mode=%s delivery_id=%s agent=%s run=%s status=%s branch=%s",
         decision.mode,
         delivery_id,
         result.agent_id,
         result.run_id,
         run.status,
+        result.branch or "-",
     )
     return decision
 
@@ -384,6 +418,38 @@ def _post_ask_comment(
         client.add_comment(card_id, text)
     except TanbanClientError as error:
         return str(error), False
+    return None, False
+
+
+def _post_work_started_comment(
+    client: TanbanClient,
+    *,
+    card: dict[str, Any] | None,
+    info: AgentStartInfo,
+) -> tuple[str | None, bool]:
+    """Post ``Arbeit begonnen`` with branch (or agent) link.
+
+    Returns ``(error_message_or_none, fatal)``. Missing card id is fatal; API
+    failures keep the Cursor run status.
+    """
+    card_id = _card_numeric_id(card)
+    if card_id is None:
+        return "work mode requires card id from board card lookup to post started comment", True
+    text = work_started_comment_text(
+        branch=info.branch,
+        branch_url=info.branch_url,
+        agent_url=info.agent_url,
+    )
+    try:
+        client.add_comment(card_id, text)
+    except TanbanClientError as error:
+        return str(error), False
+    logger.info(
+        "posted work started comment card_id=%s branch=%s agent=%s",
+        card_id,
+        info.branch or "-",
+        info.agent_id,
+    )
     return None, False
 
 

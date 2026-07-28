@@ -281,7 +281,16 @@ und in Prompt sowie Fingerprint einbeziehen.
    (`cursor-plan-<YYYYMMDDTHHMMSSZ>.md`, UTF-8 Markdown). Fehlender Text
    oder fehlende Card-ID → fataler Fehler; reiner API-Upload-Fehler behält
    den Cursor-Status und setzt `error`.
-9. Delivery als verarbeitet markieren.
+9. Nur bei Mode `c-work`: Cloud-Agent per `Agent.create` + `send` starten
+   (`auto_create_pr=true`). Sobald `git.branches` verfügbar ist (Polling
+   während des Laufs, sonst nach `wait()`), MUSS die Bridge einen Card-
+   Kommentar posten:
+   `Arbeit begonnen: [<branch>](<repo>/tree/<urlencoded-branch>)`.
+   Fehlt der Branch, SOLL stattdessen ein Link auf den Cursor-Agent
+   (`https://cursor.com/agents/<id>`) gesetzt werden. Fehlende Card-ID →
+   fataler Fehler; reiner API-Post-Fehler behält den Cursor-Status und setzt
+   `error`.
+10. Delivery als verarbeitet markieren.
 
 ### 6.6 Prompt-Inhalte
 
@@ -292,7 +301,7 @@ Checklist-Items enthalten.
 |---|---|
 | `c-ask` | Frage beantworten; Code lesen erlaubt; keine Implementierung, kein Plan; Antwort wird als Kommentar gepostet |
 | `c-plan` | konkreten Implementierungsplan erzeugen; noch nicht implementieren; Ergebnis wird als Anhang gepostet |
-| `c-work` | Card im Repo umsetzen; fokussierter Diff; kurze Zusammenfassung |
+| `c-work` | Card im Repo umsetzen; fokussierter Diff; kurze Zusammenfassung; Start-Kommentar mit Branch-Link |
 
 ## 7. Integrationen
 
@@ -368,9 +377,11 @@ Weitere Integrationstests KANNEN ergänzt werden.
 
 Diese Punkte sind bewusst noch nicht Soll der v1.0-Kernpflicht:
 
-1. Ergebnis zurück nach TanBan für `c-work` (Kommentar, Card-Update oder Anhang).
+1. Ergebnis-Zusammenfassung zurück nach TanBan für `c-work` nach Agent-Ende
+   (zusätzlich zum Start-Kommentar mit Branch-Link).
 2. Explizites Unblock der Card nach Agent-Ende.
-3. Asynchrones Polling/Webhooks von Cursor-Läufen (heute: synchrone
-   `prompt_once`-Semantik im Hintergrund-Task).
+3. Asynchrones Polling/Webhooks von Cursor-Läufen für `c-ask` / `c-plan`
+   (heute: synchrone `prompt_once`-Semantik im Hintergrund-Task; `c-work`
+   pollt den Branch parallel zum `wait()`).
 4. Board-Labels `c-ask` / `c-plan` / `c-work` sind in TanBan manuell
    anzulegen; die Bridge erzeugt sie nicht.
