@@ -1,6 +1,7 @@
 from services.label_rules import (
     blocked_reason_for_mode,
     build_prompt,
+    card_content_hash,
     evaluate_labels,
     normalize_label_names,
     resolve_mode,
@@ -76,3 +77,23 @@ def test_build_prompt_contains_mode_and_title():
     assert "do not implement" in ask.casefold()
     assert "comment" in ask.casefold()
     assert "Why?" in ask
+
+
+def test_card_content_hash_stable_and_trims():
+    a = card_content_hash(mode="c-plan", title="  Ship it  ", description="Do X")
+    b = card_content_hash(mode="c-plan", title="Ship it", description="Do X")
+    assert a == b
+    assert len(a) == 64
+
+
+def test_card_content_hash_none_description_equals_empty():
+    a = card_content_hash(mode="c-plan", title="Ship it", description=None)
+    b = card_content_hash(mode="c-plan", title="Ship it", description="")
+    assert a == b
+
+
+def test_card_content_hash_changes_with_mode_or_content():
+    base = card_content_hash(mode="c-plan", title="Ship it", description="Do X")
+    assert card_content_hash(mode="c-ask", title="Ship it", description="Do X") != base
+    assert card_content_hash(mode="c-plan", title="Ship it", description="Do Y") != base
+    assert card_content_hash(mode="c-plan", title="Other", description="Do X") != base

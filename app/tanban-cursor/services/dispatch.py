@@ -18,6 +18,7 @@ from services.label_rules import (
     LabelDecision,
     blocked_reason_for_mode,
     build_prompt,
+    card_content_hash,
     evaluate_labels,
     normalize_label_names,
 )
@@ -90,6 +91,27 @@ def _has_active_run(db: Session, *, card_public_id: str, mode: str) -> bool:
     return existing is not None
 
 
+def _has_submitted_unchanged_run(
+    db: Session,
+    *,
+    card_public_id: str,
+    mode: str,
+    content_hash: str,
+) -> bool:
+    """True if this card+mode+content was already handed to Cursor."""
+    existing = (
+        db.query(CursorAgentRun)
+        .filter(
+            CursorAgentRun.card_public_id == card_public_id,
+            CursorAgentRun.mode == mode,
+            CursorAgentRun.content_hash == content_hash,
+            CursorAgentRun.cursor_agent_id.isnot(None),
+        )
+        .first()
+    )
+    return existing is not None
+
+
 def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | None:
     """Evaluate and optionally launch Cursor for a stored inbound delivery."""
     row = db.query(InboundWebhookEvent).filter(InboundWebhookEvent.delivery_id == delivery_id).one_or_none()
@@ -156,10 +178,29 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
 
     title = str((card or {}).get("title") or (payload.get("object") or {}).get("label") or "")
     description = None if card is None else card.get("description")
+    description_text = description if isinstance(description, str) else None
+    content_hash = card_content_hash(
+        mode=decision.mode,
+        title=title,
+        description=description_text,
+    )
+
+    if _has_submitted_unchanged_run(
+        db,
+        card_public_id=card_public_id,
+        mode=decision.mode,
+        content_hash=content_hash,
+    ):
+        inbound_webhooks.mark_processed(db, row)
+        db.commit()
+        reason = f"unchanged {decision.mode} content already submitted to Cursor"
+        logger.info("delivery_id=%s skip: %s", delivery_id, reason)
+        return LabelDecision(False, mode=decision.mode, reason=reason)
+
     prompt = build_prompt(
         mode=decision.mode,
         title=title,
-        description=description if isinstance(description, str) else None,
+        description=description_text,
         card_public_id=card_public_id,
     )
 
@@ -167,6 +208,7 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
         board_public_id=row.board_public_id,
         card_public_id=card_public_id,
         mode=decision.mode,
+        content_hash=content_hash,
         status="pending",
         prompt=prompt,
         source_delivery_id=delivery_id,

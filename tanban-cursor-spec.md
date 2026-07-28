@@ -154,11 +154,14 @@ Pflichtfelder:
 - `created_at`, `updated_at`
 
 Optionale Felder: `board_public_id`, `card_public_id`, `mode`,
-`cursor_agent_id`, `cursor_run_id`, `prompt`, `result_text`, `error`,
-`source_delivery_id`.
+`content_hash`, `cursor_agent_id`, `cursor_run_id`, `prompt`, `result_text`,
+`error`, `source_delivery_id`.
 
 Bekannte Statuswerte: `pending`, `creating`, `running`, `finished`,
 `skipped`, `error` (sowie vom SDK gelieferte Endzustände).
+
+`content_hash` ist der SHA-256-Fingerprint aus Mode + normalisiertem Titel +
+Beschreibung und dient der Content-Deduplizierung (siehe §6.4).
 
 ## 5. Webhook-Empfang
 
@@ -236,15 +239,24 @@ Ohne `board_id`:
 - bei `card_created` KANN auf `labels.added` im Payload zurückgefallen werden;
 - bei `card_labels_changed` MUSS mit Fehler übersprungen werden.
 
-### 6.4 Deduplizierung aktiver Runs
+### 6.4 Deduplizierung aktiver Runs und unveränderten Inhalts
 
 Existiert bereits ein Run für dieselbe `card_public_id` und denselben `mode`
 mit Status in `{pending, running, creating}`, DARF kein neuer Run gestartet
 werden. Die Delivery MUSS dennoch als verarbeitet gelten.
 
+Existiert bereits ein Run für dieselbe `card_public_id`, denselben `mode` und
+denselben `content_hash`, bei dem `cursor_agent_id` gesetzt ist (Inhalt wurde
+bereits an Cursor übergeben), DARF kein neuer Run gestartet werden. Das gilt
+auch, wenn das Mode-Label entfernt und unverändert erneut gesetzt wird.
+Dry-Run- oder Config-/Block-Fehler ohne `cursor_agent_id` MÜSSEN einen erneuten
+Versuch mit gleichem Inhalt erlauben. Geänderte Titel- oder
+Beschreibungsinhalte erzeugen einen neuen Hash und DÜRFEN erneut dispatchen.
+
 ### 6.5 Ablauf bei positivem Dispatch
 
-1. `CursorAgentRun` mit Status `pending` und generiertem Prompt anlegen.
+1. `CursorAgentRun` mit Status `pending`, generiertem Prompt und
+   `content_hash` anlegen.
 2. Wenn `CURSOR_ACTIVE=false` → Status `skipped`, Dry-Run-Log, Ende.
 3. Wenn `CURSOR_API_KEY` oder `CURSOR_REPOSITORY` fehlen → `skipped`/`error`
    dokumentieren, Ende.
@@ -334,7 +346,8 @@ angehören, damit DNS `tanban-cursor` auflösbar ist. `webhook-deliver` mit
 Mindestens MÜSSEN abgedeckt sein:
 
 - Webhook-Signatur erzeugen/prüfen,
-- Label-Regeln (Priorität, Added-Gate, Skip ohne Mode).
+- Label-Regeln (Priorität, Added-Gate, Skip ohne Mode),
+- Content-Hash-Stabilität und Skip bei bereits übermitteltem unverändertem Inhalt.
 
 Weitere Integrationstests KANNEN ergänzt werden.
 

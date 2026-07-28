@@ -35,6 +35,9 @@ Bei `card_created` und `card_labels_changed`:
 
 Unrelated Label-Änderungen bei bereits gesetztem Mode lösen keinen neuen Run aus.
 Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppelt.
+Bereits an Cursor übergebene, unveränderte Card-Inhalte (gleicher Mode + Titel +
+Beschreibung) werden bei erneutem Setzen des Mode-Labels nicht noch einmal
+geschickt.
 
 ## Konfiguration
 

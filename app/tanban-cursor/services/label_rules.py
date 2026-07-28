@@ -6,6 +6,7 @@ Priority when multiple mode labels are present: ``c-work`` > ``c-plan`` > ``c-as
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 
 LABEL_ASK = "c-ask"
@@ -71,6 +72,18 @@ def evaluate_labels(*, current_labels: set[str], added_labels: set[str]) -> Labe
         )
 
     return LabelDecision(True, mode=mode, reason=f"dispatch mode={mode}")
+
+
+def card_content_hash(*, mode: str, title: str, description: str | None) -> str:
+    """Stable SHA-256 fingerprint of mode + card title/description.
+
+    Used to skip re-dispatch when a mode label is removed and re-added without
+    content changes. Independent of prompt template wording.
+    """
+    title_norm = (title or "").strip()
+    body_norm = (description or "").strip()
+    payload = f"{mode}\n{title_norm}\n{body_norm}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def build_prompt(*, mode: str, title: str, description: str | None, card_public_id: str | None) -> str:
