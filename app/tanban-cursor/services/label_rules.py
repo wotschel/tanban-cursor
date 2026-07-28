@@ -187,7 +187,7 @@ def build_prompt(
         return (
             "Answer the question on this TanBan card. You may read the codebase for context. "
             "Do not implement code and do not produce an implementation plan. "
-            "Write a clear, concise answer; it will be posted as a comment on the ticket.\n\n"
+            "Write a clear, concise answer; it will be posted as a ticket comment prefixed with Cursor:.\n\n"
             f"{card_block}"
         )
     if mode == LABEL_PLAN:

@@ -31,10 +31,10 @@ Bei `card_created` und `card_labels_changed`:
 2. Dieses Mode-Label wurde in diesem Event **hinzugefügt**?
 3. Card sperren mit Reason `cursor ask` / `cursor plan` / `cursor work`
 4. Wenn `CURSOR_ACTIVE=true` → Prompt an **Cursor Cloud** (`CURSOR_REPOSITORY`); sonst nur loggen
-5. Bei Mode **c-ask**: Agent-Antwort als Kommentar auf die Card
+5. Bei Mode **c-ask**: Agent-Antwort als Kommentar (`Cursor: …`)
 6. Bei Mode **c-plan**: Plan als Card-Anhang `cursor-plan-<UTC-Zeitstempel>.md`
-7. Bei Mode **c-work**: Kommentar `Arbeit begonnen` mit Branch-Link (sobald
-   Cursor einen Branch gepusht hat; sonst Link zum Cursor-Agent)
+7. Bei Mode **c-work**: Kommentar `Cursor: Arbeit begonnen` mit Branch-Link,
+   nach Ende `Cursor: Arbeit beendet` (+ Zusammenfassung), danach Unblock
 
 Unrelated Label-Änderungen bei bereits gesetztem Mode lösen keinen neuen Run aus.
 Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppelt.
@@ -121,6 +121,5 @@ cd /opt/tanban-cursor && docker compose logs -f app
 
 ## Nächste Schritte
 
-1. Ergebnis-Zusammenfassung zurück nach TanBan für `c-work` nach Agent-Ende
-2. Labels `c-ask` / `c-plan` / `c-work` auf jedem gewünschten Board anlegen
-3. `CURSOR_API_KEY`, `CURSOR_REPOSITORY`, `TANBAN_BOARDS` in `.env` setzen
+1. Labels `c-ask` / `c-plan` / `c-work` auf jedem gewünschten Board anlegen
+2. `CURSOR_API_KEY`, `CURSOR_REPOSITORY`, `TANBAN_BOARDS` in `.env` setzen

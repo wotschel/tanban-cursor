@@ -14,8 +14,10 @@ from models import CursorAgentRun, InboundWebhookEvent
 from services import inbound_webhooks
 from services.cursor_client import (
     AgentStartInfo,
+    AgentLaunchResult,
     CursorClient,
     CursorClientError,
+    work_finished_comment_text,
     work_started_comment_text,
 )
 from services.label_rules import (
@@ -356,6 +358,28 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
             logger.warning("plan attachment failed delivery_id=%s: %s", delivery_id, attach_error)
             return LabelDecision(False, mode=decision.mode, reason=run.error)
 
+    if decision.mode == LABEL_WORK:
+        finish_error, fatal = _post_work_finished_comment(client, card=card, result=result)
+        if finish_error:
+            if not run.error:
+                run.error = finish_error[:500]
+            if fatal:
+                run.status = "error"
+            run.updated_at = utc_now()
+            inbound_webhooks.mark_processed(db, row, error=run.error)
+            db.commit()
+            logger.warning("work finished comment failed delivery_id=%s: %s", delivery_id, finish_error)
+            return LabelDecision(False, mode=decision.mode, reason=run.error)
+
+        unblock_error = _unblock_card(client, card=card)
+        if unblock_error:
+            run.error = unblock_error[:500]
+            run.updated_at = utc_now()
+            inbound_webhooks.mark_processed(db, row, error=run.error)
+            db.commit()
+            logger.warning("work unblock failed delivery_id=%s: %s", delivery_id, unblock_error)
+            return LabelDecision(False, mode=decision.mode, reason=run.error)
+
     inbound_webhooks.mark_processed(db, row)
     db.commit()
     logger.info(
@@ -397,6 +421,18 @@ def _block_card_for_mode(
     return None
 
 
+def _unblock_card(client: TanbanClient, *, card: dict[str, Any] | None) -> str | None:
+    """Clear TanBan card block after Cursor work. Return error or None."""
+    card_id = _card_numeric_id(card)
+    if card_id is None:
+        return "unblocking requires card id from board card lookup"
+    try:
+        client.set_card_unblocked(card_id)
+    except TanbanClientError as error:
+        return str(error)
+    return None
+
+
 def _post_ask_comment(
     client: TanbanClient,
     *,
@@ -413,7 +449,7 @@ def _post_ask_comment(
     card_id = _card_numeric_id(card)
     if card_id is None:
         return "ask mode requires card id from board card lookup to post comment", True
-    text = f"Cursor ask:\n\n{str(result_text).strip()}"
+    text = f"Cursor:\n\n{str(result_text).strip()}"
     try:
         client.add_comment(card_id, text)
     except TanbanClientError as error:
@@ -427,7 +463,7 @@ def _post_work_started_comment(
     card: dict[str, Any] | None,
     info: AgentStartInfo,
 ) -> tuple[str | None, bool]:
-    """Post ``Arbeit begonnen`` with branch (or agent) link.
+    """Post ``Cursor: Arbeit begonnen`` with branch (or agent) link.
 
     Returns ``(error_message_or_none, fatal)``. Missing card id is fatal; API
     failures keep the Cursor run status.
@@ -449,6 +485,39 @@ def _post_work_started_comment(
         card_id,
         info.branch or "-",
         info.agent_id,
+    )
+    return None, False
+
+
+def _post_work_finished_comment(
+    client: TanbanClient,
+    *,
+    card: dict[str, Any] | None,
+    result: AgentLaunchResult,
+) -> tuple[str | None, bool]:
+    """Post ``Cursor: Arbeit beendet`` with optional summary/PR before unblock.
+
+    Returns ``(error_message_or_none, fatal)``. Missing card id is fatal; API
+    failures keep the Cursor run status.
+    """
+    card_id = _card_numeric_id(card)
+    if card_id is None:
+        return "work mode requires card id from board card lookup to post finished comment", True
+    text = work_finished_comment_text(
+        result_text=result.result_text,
+        branch=result.branch,
+        branch_url=result.branch_url,
+        pr_url=result.pr_url,
+    )
+    try:
+        client.add_comment(card_id, text)
+    except TanbanClientError as error:
+        return str(error), False
+    logger.info(
+        "posted work finished comment card_id=%s branch=%s agent=%s",
+        card_id,
+        result.branch or "-",
+        result.agent_id or "-",
     )
     return None, False
 

@@ -123,3 +123,9 @@ class TanbanClient:
             f"/api/cards/{card_id}",
             json={"blocked": True, "blocked_reason": reason},
         )
+
+    def set_card_unblocked(self, card_id: int) -> Any:
+        return self.patch(
+            f"/api/cards/{card_id}",
+            json={"blocked": False, "blocked_reason": None},
+        )

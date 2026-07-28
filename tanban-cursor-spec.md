@@ -274,7 +274,7 @@ und in Prompt sowie Fingerprint einbeziehen.
 5. Cursor Cloud Agent starten (`runtime=cloud`, konfiguriertes Model/Repo).
 6. Run mit Agent-/Run-IDs, Status und Ergebnistext aktualisieren.
 7. Nur bei Mode `c-ask`: Ergebnis als Card-Kommentar posten
-   (`Cursor ask:\n\n…`). Fehlender Text oder fehlende Card-ID → fataler
+   (`Cursor:\n\n…`). Fehlender Text oder fehlende Card-ID → fataler
    Fehler; reiner API-Post-Fehler behält den Cursor-Status und setzt
    `error`.
 8. Nur bei Mode `c-plan`: Ergebnis als Card-Anhang hochladen
@@ -285,12 +285,20 @@ und in Prompt sowie Fingerprint einbeziehen.
    (`auto_create_pr=true`). Sobald `git.branches` verfügbar ist (Polling
    während des Laufs, sonst nach `wait()`), MUSS die Bridge einen Card-
    Kommentar posten:
-   `Arbeit begonnen: [<branch>](<repo>/tree/<urlencoded-branch>)`.
+   `Cursor: Arbeit begonnen: [<branch>](<repo>/tree/<urlencoded-branch>)`.
    Fehlt der Branch, SOLL stattdessen ein Link auf den Cursor-Agent
    (`https://cursor.com/agents/<id>`) gesetzt werden. Fehlende Card-ID →
    fataler Fehler; reiner API-Post-Fehler behält den Cursor-Status und setzt
    `error`.
-10. Delivery als verarbeitet markieren.
+10. Nur bei Mode `c-work` nach Agent-Ende: Card-Kommentar
+    `Cursor: Arbeit beendet` mit optionaler PR-/Branch-Zeile und
+    Ergebnistext. Anschließend MUSS die Bridge die Card unblocken
+    (`blocked=false`, `blocked_reason=null`). Fehlende Card-ID beim
+    Kommentar → fataler Fehler; API-Fehler bei Kommentar oder Unblock
+    behalten den Cursor-Status und setzen `error`.
+11. Delivery als verarbeitet markieren.
+
+Bridge-Kommentare SOLLEN mit dem Präfix `Cursor:` beginnen.
 
 ### 6.6 Prompt-Inhalte
 
@@ -299,9 +307,9 @@ Checklist-Items enthalten.
 
 | Mode | Auftrag an den Agenten |
 |---|---|
-| `c-ask` | Frage beantworten; Code lesen erlaubt; keine Implementierung, kein Plan; Antwort wird als Kommentar gepostet |
+| `c-ask` | Frage beantworten; Code lesen erlaubt; keine Implementierung, kein Plan; Antwort wird als `Cursor:`-Kommentar gepostet |
 | `c-plan` | konkreten Implementierungsplan erzeugen; noch nicht implementieren; Ergebnis wird als Anhang gepostet |
-| `c-work` | Card im Repo umsetzen; fokussierter Diff; kurze Zusammenfassung; Start-Kommentar mit Branch-Link |
+| `c-work` | Card im Repo umsetzen; Start- und Ende-Kommentar mit `Cursor:`-Präfix; Unblock nach Ende |
 
 ## 7. Integrationen
 
@@ -312,6 +320,7 @@ Die Bridge SOLL mindestens können:
 - Card per Board-ID + `public_id` finden,
 - Kommentare und Checklist-Items einer Card laden,
 - Card blocken (`blocked` + Reason),
+- Card unblocken (`blocked=false`),
 - Kommentar an Card anhängen,
 - Datei-Anhang an Card hochladen (`POST /api/cards/{id}/attachments`).
 
@@ -377,11 +386,10 @@ Weitere Integrationstests KANNEN ergänzt werden.
 
 Diese Punkte sind bewusst noch nicht Soll der v1.0-Kernpflicht:
 
-1. Ergebnis-Zusammenfassung zurück nach TanBan für `c-work` nach Agent-Ende
-   (zusätzlich zum Start-Kommentar mit Branch-Link).
-2. Explizites Unblock der Card nach Agent-Ende.
-3. Asynchrones Polling/Webhooks von Cursor-Läufen für `c-ask` / `c-plan`
+1. Asynchrones Polling/Webhooks von Cursor-Läufen für `c-ask` / `c-plan`
    (heute: synchrone `prompt_once`-Semantik im Hintergrund-Task; `c-work`
    pollt den Branch parallel zum `wait()`).
-4. Board-Labels `c-ask` / `c-plan` / `c-work` sind in TanBan manuell
+2. Board-Labels `c-ask` / `c-plan` / `c-work` sind in TanBan manuell
    anzulegen; die Bridge erzeugt sie nicht.
+3. Frühes Branch-Polling über SDK `GetRun` kann fehlschlagen; der
+   Start-Kommentar fällt dann auf das Ergebnis nach `wait()` zurück.

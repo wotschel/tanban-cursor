@@ -103,10 +103,32 @@ def _first_branch_info(git: Any) -> tuple[str | None, str | None, str | None]:
 def work_started_comment_text(*, branch: str | None, branch_url: str | None, agent_url: str) -> str:
     """Build the TanBan comment body for a started c-work run."""
     if branch and branch_url:
-        return f"Arbeit begonnen: [{branch}]({branch_url})"
+        return f"Cursor: Arbeit begonnen: [{branch}]({branch_url})"
     if branch:
-        return f"Arbeit begonnen: `{branch}`"
-    return f"Arbeit begonnen: [Cursor Agent]({agent_url})"
+        return f"Cursor: Arbeit begonnen: `{branch}`"
+    return f"Cursor: Arbeit begonnen: [Cursor Agent]({agent_url})"
+
+
+def work_finished_comment_text(
+    *,
+    result_text: str | None,
+    branch: str | None = None,
+    branch_url: str | None = None,
+    pr_url: str | None = None,
+) -> str:
+    """Build the TanBan comment body when a c-work run completes."""
+    lines = ["Cursor: Arbeit beendet"]
+    if pr_url:
+        lines.append(f"PR: {pr_url}")
+    elif branch and branch_url:
+        lines.append(f"Branch: [{branch}]({branch_url})")
+    elif branch:
+        lines.append(f"Branch: `{branch}`")
+    summary = (result_text or "").strip()
+    if summary:
+        lines.append("")
+        lines.append(summary)
+    return "\n".join(lines)
 
 
 class CursorClient:

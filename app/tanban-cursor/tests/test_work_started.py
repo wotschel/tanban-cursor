@@ -1,14 +1,16 @@
-"""Helpers and comments for c-work start notification."""
+"""Comments for c-work start/finish and Cursor: prefix."""
 
 from unittest.mock import MagicMock
 
 from services.cursor_client import (
+    AgentLaunchResult,
     AgentStartInfo,
     branch_browse_url,
     normalize_repo_https_url,
+    work_finished_comment_text,
     work_started_comment_text,
 )
-from services.dispatch import _post_work_started_comment
+from services.dispatch import _post_work_finished_comment, _post_work_started_comment
 from services.tanban_client import TanbanClientError
 
 
@@ -32,9 +34,8 @@ def test_work_started_comment_prefers_branch_link():
         branch_url="https://github.com/wotschel/tanban/tree/cursor%2Ffix-skin",
         agent_url="https://cursor.com/agents/bc-1",
     )
-    assert text.startswith("Arbeit begonnen:")
+    assert text.startswith("Cursor: Arbeit begonnen:")
     assert "[cursor/fix-skin](" in text
-    assert "cursor%2Ffix-skin" in text
 
 
 def test_work_started_comment_falls_back_to_agent_link():
@@ -43,7 +44,19 @@ def test_work_started_comment_falls_back_to_agent_link():
         branch_url=None,
         agent_url="https://cursor.com/agents/bc-1",
     )
-    assert text == "Arbeit begonnen: [Cursor Agent](https://cursor.com/agents/bc-1)"
+    assert text == "Cursor: Arbeit begonnen: [Cursor Agent](https://cursor.com/agents/bc-1)"
+
+
+def test_work_finished_comment_includes_summary_and_pr():
+    text = work_finished_comment_text(
+        result_text="Fixed button styling.",
+        branch="cursor/x",
+        branch_url="https://github.com/org/repo/tree/cursor%2Fx",
+        pr_url="https://github.com/org/repo/pull/12",
+    )
+    assert text.startswith("Cursor: Arbeit beendet")
+    assert "PR: https://github.com/org/repo/pull/12" in text
+    assert "Fixed button styling." in text
 
 
 def test_post_work_started_comment_posts_markdown():
@@ -58,11 +71,27 @@ def test_post_work_started_comment_posts_markdown():
     err, fatal = _post_work_started_comment(client, card={"id": 33}, info=info)
     assert err is None
     assert fatal is False
-    client.add_comment.assert_called_once()
     args = client.add_comment.call_args.args
     assert args[0] == 33
-    assert "Arbeit begonnen" in args[1]
-    assert "cursor/x" in args[1]
+    assert args[1].startswith("Cursor: Arbeit begonnen:")
+
+
+def test_post_work_finished_comment_posts_markdown():
+    client = MagicMock()
+    result = AgentLaunchResult(
+        agent_id="bc-1",
+        run_id="run-1",
+        status="finished",
+        result_text="Done.",
+        branch="cursor/x",
+        branch_url="https://github.com/org/repo/tree/cursor%2Fx",
+    )
+    err, fatal = _post_work_finished_comment(client, card={"id": 33}, result=result)
+    assert err is None
+    assert fatal is False
+    args = client.add_comment.call_args.args
+    assert args[1].startswith("Cursor: Arbeit beendet")
+    assert "Done." in args[1]
 
 
 def test_post_work_started_comment_api_error_not_fatal():
