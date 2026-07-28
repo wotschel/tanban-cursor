@@ -75,7 +75,13 @@ Unbekannte `board.public_id` in der Map → Webhook-Signatur **401**.
 | Methode | Pfad | Beschreibung |
 |---|---|---|
 | `GET` | `/health` | Healthcheck |
+| `GET` | `/runs?token=…` | Operator-UI: Agent-Runs (Status) |
+| `GET` | `/api/runs?token=…` | Dieselbe Liste als JSON |
 | `POST` | `/webhooks/tanban` | Empfang ausgehender TanBan-Board-Webhooks |
+
+Token: `STATUS_UI_TOKEN` falls gesetzt, sonst `SECRET_KEY`. Alternativ Header
+`Authorization: Bearer …` oder `X-Status-UI-Token`. Host-Bind ist
+`127.0.0.1` — die Seite ist für Operatoren lokal gedacht.
 
 TanBan signiert mit `X-TanBan-Signature: sha256=…` sowie
 `X-TanBan-Event` / `X-TanBan-Delivery`. Deliveries werden idempotent in
@@ -117,6 +123,13 @@ cd /opt/tanban-cursor && docker compose logs -f app
 ./manage.sh health
 ./manage.sh webhook-list
 ./manage.sh run-list
+```
+
+Operator-Status-UI (Browser):
+
+```bash
+# Token = STATUS_UI_TOKEN oder SECRET_KEY aus .env
+xdg-open "http://127.0.0.1:8100/runs?token=$(grep '^SECRET_KEY=' .env | cut -d= -f2-)"
 ```
 
 ## Nächste Schritte

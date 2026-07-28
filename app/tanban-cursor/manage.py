@@ -45,6 +45,7 @@ def cmd_health(_args: argparse.Namespace) -> int:
     print(f"cursor_model={settings.cursor_model}")
     print(f"cursor_runtime={settings.cursor_runtime}")
     print(f"cursor_repository={settings.cursor_repository or '(unset)'}")
+    print(f"status_ui_token={'set' if settings.status_ui_token else 'unset (uses SECRET_KEY)'}")
     return 0
 
 

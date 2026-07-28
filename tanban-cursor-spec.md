@@ -29,7 +29,7 @@ Nicht Bestandteil dieser Spezifikation:
 
 - die TanBan-Produktspezifikation selbst,
 - die interne Cursor-Cloud-Implementierung,
-- UI/Frontend der Bridge (es gibt keines).
+- UI/Frontend der Bridge außer der token-geschützten Operator-Run-Liste.
 
 ## 2. Architektur und Tech-Stack
 
@@ -64,8 +64,15 @@ Die Bridge MUSS bereitstellen:
 | `GET` | `/health` | Healthcheck |
 | `GET` | `/` | Service-Hinweis mit Endpunktliste |
 | `POST` | `/webhooks/tanban` | Empfang TanBan-Board-Webhooks |
+| `GET` | `/runs` | Operator-HTML: letzte Agent-Runs (Token) |
+| `GET` | `/runs/{id}` | Operator-HTML: Run-Detail (Token) |
+| `GET` | `/api/runs` | Operator-JSON: Run-Liste (Token) |
+| `GET` | `/api/runs/{id}` | Operator-JSON: Run-Detail (Token) |
 
-Die Bridge DARF NICHT eine öffentliche HTML-UI bereitstellen.
+Die Bridge DARF NICHT eine **unauthentifizierte** öffentliche HTML-UI
+bereitstellen. Die Operator-Statusseite unter `/runs` MUSS durch ein Token
+geschützt sein (`STATUS_UI_TOKEN`, sonst Fallback `SECRET_KEY`) über Query
+`token=…`, Header `Authorization: Bearer …` oder `X-Status-UI-Token`.
 OpenAPI unter `/docs` KANN verfügbar sein (Framework-Default).
 
 Host-Port-Default: `8100` → Container-Port `8000` (Bind nur auf `127.0.0.1`,
@@ -102,6 +109,7 @@ Umgebungsvariablen MÜSSEN Vorrang haben. `.env` DARF NICHT versioniert werden;
 | `CURSOR_MODEL` | nein | `composer-2.5` |
 | `CURSOR_RUNTIME` | nein | `cloud` oder `local`; Dispatch erzwingt cloud |
 | `CURSOR_REPOSITORY` | wenn scharf | Repo-URL für Cloud-Agents |
+| `STATUS_UI_TOKEN` | nein | Token für `/runs`; Fallback `SECRET_KEY` |
 | `ACTIVITY_LOG_PATH` | nein | Log-Pfad im Container |
 
 Wenn `TANBAN_BOARDS` gesetzt ist, MUSS es ein nicht-leeres JSON-Objekt sein.

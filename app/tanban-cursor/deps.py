@@ -1,10 +1,33 @@
+import hmac
 import json
 
-from fastapi import Header, HTTPException, Request
+from fastapi import Header, HTTPException, Query, Request
 
 from config import settings
 from services import webhook_verify
 from services.tanban_boards import board_public_id_from_body
+
+
+def _extract_bearer(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, value = authorization.partition(" ")
+    if scheme.casefold() != "bearer" or not value.strip():
+        return None
+    return value.strip()
+
+
+def require_status_ui_token(
+    token: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+    x_status_ui_token: str | None = Header(default=None, alias="X-Status-UI-Token"),
+) -> str:
+    """Require the operator status-UI token (query, Bearer, or header)."""
+    provided = (token or "").strip() or _extract_bearer(authorization) or (x_status_ui_token or "").strip()
+    expected = settings.status_ui_access_token()
+    if not provided or len(provided) != len(expected) or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing status UI token")
+    return provided
 
 
 async def require_tanban_webhook_signature(

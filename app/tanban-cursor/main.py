@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 import schemas
 from config import settings
+from routers import runs as runs_routes
 from routers import webhooks as webhook_routes
 
 
@@ -26,6 +27,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="tanban-cursor", lifespan=lifespan)
 app.include_router(webhook_routes.router)
+app.include_router(runs_routes.router)
 
 
 @app.get("/health", response_model=schemas.HealthOut)
@@ -39,6 +41,7 @@ def root():
         {
             "service": "tanban-cursor",
             "health": "/health",
+            "runs": "GET /runs?token=… (operator status UI)",
             "webhooks": {"tanban": "POST /webhooks/tanban"},
         }
     )

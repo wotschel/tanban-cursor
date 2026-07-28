@@ -60,10 +60,15 @@ class Settings:
     cursor_runtime: str
     cursor_repository: str
     activity_log_path: str
+    status_ui_token: str
 
     @property
     def is_production(self) -> bool:
         return self.app_env.casefold() == "production"
+
+    def status_ui_access_token(self) -> str:
+        """Token required by the operator runs UI (dedicated or SECRET_KEY)."""
+        return self.status_ui_token or self.secret_key
 
     def resolve_board(self, board_public_id: str | None) -> TanbanBoardConfig | LegacyBoardBinding | None:
         """Return credentials for a webhook board public_id."""
@@ -168,6 +173,7 @@ def load_settings() -> Settings:
         cursor_runtime=cursor_runtime,
         cursor_repository=(os.environ.get("CURSOR_REPOSITORY") or "").strip(),
         activity_log_path=(os.environ.get("ACTIVITY_LOG_PATH") or "./volumes/logs/activity.log").strip(),
+        status_ui_token=(os.environ.get("STATUS_UI_TOKEN") or "").strip(),
     )
 
 

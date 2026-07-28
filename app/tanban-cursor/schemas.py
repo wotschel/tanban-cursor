@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -17,10 +19,20 @@ class CursorAgentRunOut(BaseModel):
     id: int
     board_public_id: str | None = None
     card_public_id: str | None = None
+    mode: str | None = None
     cursor_agent_id: str | None = None
     cursor_run_id: str | None = None
     status: str
+    error: str | None = None
     source_delivery_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class CursorAgentRunDetailOut(CursorAgentRunOut):
+    prompt: str | None = None
+    result_text: str | None = None
+    content_hash: str | None = None
 
 
 class StartAgentRequest(BaseModel):
