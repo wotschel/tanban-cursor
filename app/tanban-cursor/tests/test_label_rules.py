@@ -3,6 +3,8 @@ from services.label_rules import (
     build_prompt,
     card_content_hash,
     evaluate_labels,
+    normalize_checklist_items,
+    normalize_comment_texts,
     normalize_label_names,
     resolve_mode,
 )
@@ -70,6 +72,8 @@ def test_build_prompt_contains_mode_and_title():
     plan = build_prompt(mode="c-plan", title="Ship it", description="Do X", card_public_id="abc")
     assert "implementation plan" in plan.casefold()
     assert "Ship it" in plan
+    assert "Comments:" in plan
+    assert "Checklist:" in plan
     work = build_prompt(mode="c-work", title="Ship it", description=None, card_public_id="abc")
     assert "Implement" in work
     ask = build_prompt(mode="c-ask", title="Why?", description="Explain X", card_public_id="abc")
@@ -77,6 +81,20 @@ def test_build_prompt_contains_mode_and_title():
     assert "do not implement" in ask.casefold()
     assert "comment" in ask.casefold()
     assert "Why?" in ask
+
+
+def test_build_prompt_includes_comments_and_checklist():
+    prompt = build_prompt(
+        mode="c-plan",
+        title="Ship it",
+        description="Do X",
+        card_public_id="abc",
+        comments=["Please also cover auth"],
+        checklist_items=[("Write tests", False), ("Ship", True)],
+    )
+    assert "Please also cover auth" in prompt
+    assert "[ ] Write tests" in prompt
+    assert "[x] Ship" in prompt
 
 
 def test_card_content_hash_stable_and_trims():
@@ -97,3 +115,47 @@ def test_card_content_hash_changes_with_mode_or_content():
     assert card_content_hash(mode="c-ask", title="Ship it", description="Do X") != base
     assert card_content_hash(mode="c-plan", title="Ship it", description="Do Y") != base
     assert card_content_hash(mode="c-plan", title="Other", description="Do X") != base
+
+
+def test_card_content_hash_changes_with_new_comment():
+    base = card_content_hash(mode="c-plan", title="Ship it", description="Do X", comments=[])
+    with_comment = card_content_hash(
+        mode="c-plan",
+        title="Ship it",
+        description="Do X",
+        comments=["New context"],
+    )
+    assert base != with_comment
+
+
+def test_card_content_hash_changes_with_checklist():
+    base = card_content_hash(mode="c-plan", title="Ship it", description="Do X")
+    with_items = card_content_hash(
+        mode="c-plan",
+        title="Ship it",
+        description="Do X",
+        checklist_items=[("Write tests", False)],
+    )
+    toggled = card_content_hash(
+        mode="c-plan",
+        title="Ship it",
+        description="Do X",
+        checklist_items=[("Write tests", True)],
+    )
+    assert base != with_items
+    assert with_items != toggled
+
+
+def test_normalize_comment_texts_orders_by_id():
+    assert normalize_comment_texts(
+        [{"id": 2, "text": " later "}, {"id": 1, "text": " first "}]
+    ) == ["first", "later"]
+
+
+def test_normalize_checklist_items_orders_by_position():
+    assert normalize_checklist_items(
+        [
+            {"id": 9, "position": 2, "text": "B", "done": True},
+            {"id": 3, "position": 1, "text": " A ", "done": False},
+        ]
+    ) == [("A", False), ("B", True)]

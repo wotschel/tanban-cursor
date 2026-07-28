@@ -161,7 +161,8 @@ Bekannte Statuswerte: `pending`, `creating`, `running`, `finished`,
 `skipped`, `error` (sowie vom SDK gelieferte Endzustände).
 
 `content_hash` ist der SHA-256-Fingerprint aus Mode + normalisiertem Titel +
-Beschreibung und dient der Content-Deduplizierung (siehe §6.4).
+Beschreibung + Kommentartexten + Checklist-Einträgen (Text und Done-Status)
+und dient der Content-Deduplizierung (siehe §6.4).
 
 ## 5. Webhook-Empfang
 
@@ -250,8 +251,13 @@ denselben `content_hash`, bei dem `cursor_agent_id` gesetzt ist (Inhalt wurde
 bereits an Cursor übergeben), DARF kein neuer Run gestartet werden. Das gilt
 auch, wenn das Mode-Label entfernt und unverändert erneut gesetzt wird.
 Dry-Run- oder Config-/Block-Fehler ohne `cursor_agent_id` MÜSSEN einen erneuten
-Versuch mit gleichem Inhalt erlauben. Geänderte Titel- oder
-Beschreibungsinhalte erzeugen einen neuen Hash und DÜRFEN erneut dispatchen.
+Versuch mit gleichem Inhalt erlauben. Geänderte Titel-, Beschreibungs-,
+Kommentar- oder Checklist-Inhalte erzeugen einen neuen Hash und DÜRFEN erneut
+dispatchen.
+
+Vor dem Hash MUSS die Bridge sichtbare Kommentare und Checklist-Items der Card
+über die TanBan Board-API laden (sofern eine numerische Card-`id` bekannt ist)
+und in Prompt sowie Fingerprint einbeziehen.
 
 ### 6.5 Ablauf bei positivem Dispatch
 
@@ -275,7 +281,8 @@ Beschreibungsinhalte erzeugen einen neuen Hash und DÜRFEN erneut dispatchen.
 
 ### 6.6 Prompt-Inhalte
 
-Jeder Prompt MUSS Card-`public_id`, Titel und Beschreibung enthalten.
+Jeder Prompt MUSS Card-`public_id`, Titel, Beschreibung, Kommentare und
+Checklist-Items enthalten.
 
 | Mode | Auftrag an den Agenten |
 |---|---|
@@ -290,6 +297,7 @@ Jeder Prompt MUSS Card-`public_id`, Titel und Beschreibung enthalten.
 Die Bridge SOLL mindestens können:
 
 - Card per Board-ID + `public_id` finden,
+- Kommentare und Checklist-Items einer Card laden,
 - Card blocken (`blocked` + Reason),
 - Kommentar an Card anhängen.
 

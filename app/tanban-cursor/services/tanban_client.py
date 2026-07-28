@@ -82,6 +82,14 @@ class TanbanClient:
                 return card
         return None
 
+    def list_comments(self, card_id: int) -> list[Any]:
+        result = self.get(f"/api/cards/{card_id}/comments")
+        return result if isinstance(result, list) else []
+
+    def list_checklist_items(self, card_id: int) -> list[Any]:
+        result = self.get(f"/api/cards/{card_id}/checklist-items")
+        return result if isinstance(result, list) else []
+
     def add_comment(self, card_id: int, text: str) -> Any:
         return self.post(f"/api/cards/{card_id}/comments", json={"text": text})
 

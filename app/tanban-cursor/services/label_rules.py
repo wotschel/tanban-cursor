@@ -74,26 +74,114 @@ def evaluate_labels(*, current_labels: set[str], added_labels: set[str]) -> Labe
     return LabelDecision(True, mode=mode, reason=f"dispatch mode={mode}")
 
 
-def card_content_hash(*, mode: str, title: str, description: str | None) -> str:
-    """Stable SHA-256 fingerprint of mode + card title/description.
+def card_content_hash(
+    *,
+    mode: str,
+    title: str,
+    description: str | None,
+    comments: list[str] | None = None,
+    checklist_items: list[tuple[str, bool]] | None = None,
+) -> str:
+    """Stable SHA-256 fingerprint of mode + card substance.
 
-    Used to skip re-dispatch when a mode label is removed and re-added without
-    content changes. Independent of prompt template wording.
+    Includes title, description, comment texts, and checklist items so that a
+    new comment (or checklist change) allows re-dispatch after label toggle.
+    Independent of prompt template wording.
     """
     title_norm = (title or "").strip()
     body_norm = (description or "").strip()
-    payload = f"{mode}\n{title_norm}\n{body_norm}".encode("utf-8")
+    comment_lines = [(c or "").strip() for c in (comments or [])]
+    checklist_lines = [
+        f"{'1' if done else '0'}\t{(text or '').strip()}" for text, done in (checklist_items or [])
+    ]
+    parts = [
+        mode,
+        title_norm,
+        body_norm,
+        "---comments---",
+        *comment_lines,
+        "---checklist---",
+        *checklist_lines,
+    ]
+    payload = "\n".join(parts).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
-def build_prompt(*, mode: str, title: str, description: str | None, card_public_id: str | None) -> str:
+def normalize_comment_texts(comments: list[dict] | None) -> list[str]:
+    """Stable comment text list ordered by id ascending."""
+    if not comments:
+        return []
+    rows: list[tuple[int, str]] = []
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        text = comment.get("text")
+        if not isinstance(text, str):
+            continue
+        try:
+            comment_id = int(comment.get("id"))
+        except (TypeError, ValueError):
+            comment_id = 0
+        rows.append((comment_id, text.strip()))
+    rows.sort(key=lambda item: item[0])
+    return [text for _, text in rows]
+
+
+def normalize_checklist_items(items: list[dict] | None) -> list[tuple[str, bool]]:
+    """Stable checklist (text, done) ordered by position then id."""
+    if not items:
+        return []
+    rows: list[tuple[int, int, str, bool]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        if not isinstance(text, str):
+            continue
+        try:
+            item_id = int(item.get("id"))
+        except (TypeError, ValueError):
+            item_id = 0
+        try:
+            position = int(item.get("position") or 0)
+        except (TypeError, ValueError):
+            position = 0
+        done = bool(item.get("done"))
+        rows.append((position, item_id, text.strip(), done))
+    rows.sort(key=lambda item: (item[0], item[1]))
+    return [(text, done) for _, _, text, done in rows]
+
+
+def build_prompt(
+    *,
+    mode: str,
+    title: str,
+    description: str | None,
+    card_public_id: str | None,
+    comments: list[str] | None = None,
+    checklist_items: list[tuple[str, bool]] | None = None,
+) -> str:
     card_ref = card_public_id or "(unknown)"
     body = (description or "").strip() or "(no description)"
     title_text = title.strip() or "(untitled)"
+    comment_texts = [(c or "").strip() for c in (comments or []) if (c or "").strip()]
+    if comment_texts:
+        comments_block = "\n".join(f"- {text}" for text in comment_texts)
+    else:
+        comments_block = "(no comments)"
+    checklist = list(checklist_items or [])
+    if checklist:
+        checklist_block = "\n".join(
+            f"- [{'x' if done else ' '}] {(text or '').strip() or '(empty)'}" for text, done in checklist
+        )
+    else:
+        checklist_block = "(no checklist items)"
     card_block = (
         f"Card public_id: {card_ref}\n"
         f"Title: {title_text}\n"
         f"Description:\n{body}\n"
+        f"Comments:\n{comments_block}\n"
+        f"Checklist:\n{checklist_block}\n"
     )
     if mode == LABEL_ASK:
         return (

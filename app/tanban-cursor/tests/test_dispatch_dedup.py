@@ -45,12 +45,35 @@ def test_has_submitted_unchanged_run_false_when_no_row():
 
 def test_c_plan_toggle_same_content_hash_is_identical():
     """Remove/re-add c-plan without edits yields the same fingerprint."""
-    first = card_content_hash(mode="c-plan", title="Plan me", description="Steps")
-    again = card_content_hash(mode="c-plan", title="Plan me", description="Steps")
+    first = card_content_hash(
+        mode="c-plan",
+        title="Plan me",
+        description="Steps",
+        comments=["note"],
+        checklist_items=[("A", False)],
+    )
+    again = card_content_hash(
+        mode="c-plan",
+        title="Plan me",
+        description="Steps",
+        comments=["note"],
+        checklist_items=[("A", False)],
+    )
     assert first == again
 
 
 def test_c_plan_edit_before_readd_changes_hash():
     before = card_content_hash(mode="c-plan", title="Plan me", description="Steps")
     after = card_content_hash(mode="c-plan", title="Plan me", description="Steps v2")
+    assert before != after
+
+
+def test_c_plan_new_comment_before_readd_changes_hash():
+    before = card_content_hash(mode="c-plan", title="Plan me", description="Steps", comments=[])
+    after = card_content_hash(
+        mode="c-plan",
+        title="Plan me",
+        description="Steps",
+        comments=["Please reconsider auth"],
+    )
     assert before != after

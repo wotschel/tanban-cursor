@@ -20,6 +20,8 @@ from services.label_rules import (
     build_prompt,
     card_content_hash,
     evaluate_labels,
+    normalize_checklist_items,
+    normalize_comment_texts,
     normalize_label_names,
 )
 from services.tanban_boards import LegacyBoardBinding, TanbanBoardConfig
@@ -179,10 +181,26 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     title = str((card or {}).get("title") or (payload.get("object") or {}).get("label") or "")
     description = None if card is None else card.get("description")
     description_text = description if isinstance(description, str) else None
+
+    comment_texts: list[str] = []
+    checklist_items: list[tuple[str, bool]] = []
+    card_id = _card_numeric_id(card)
+    if card_id is not None:
+        try:
+            comment_texts = normalize_comment_texts(client.list_comments(card_id))
+            checklist_items = normalize_checklist_items(client.list_checklist_items(card_id))
+        except TanbanClientError as error:
+            inbound_webhooks.mark_processed(db, row, error=str(error))
+            db.commit()
+            logger.warning("delivery_id=%s skip: failed loading card substance: %s", delivery_id, error)
+            return LabelDecision(False, mode=decision.mode, reason=str(error))
+
     content_hash = card_content_hash(
         mode=decision.mode,
         title=title,
         description=description_text,
+        comments=comment_texts,
+        checklist_items=checklist_items,
     )
 
     if _has_submitted_unchanged_run(
@@ -202,6 +220,8 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
         title=title,
         description=description_text,
         card_public_id=card_public_id,
+        comments=comment_texts,
+        checklist_items=checklist_items,
     )
 
     run = CursorAgentRun(
@@ -302,6 +322,15 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     return decision
 
 
+def _card_numeric_id(card: dict[str, Any] | None) -> int | None:
+    if not isinstance(card, dict) or card.get("id") is None:
+        return None
+    try:
+        return int(card["id"])
+    except (TypeError, ValueError):
+        return None
+
+
 def _block_card_for_mode(
     client: TanbanClient,
     *,
@@ -309,12 +338,9 @@ def _block_card_for_mode(
     mode: str,
 ) -> str | None:
     """Mark the TanBan card blocked while Cursor works. Return error or None."""
-    if not isinstance(card, dict) or card.get("id") is None:
+    card_id = _card_numeric_id(card)
+    if card_id is None:
         return "blocking requires card id from board card lookup"
-    try:
-        card_id = int(card["id"])
-    except (TypeError, ValueError):
-        return f"blocking got invalid card id: {card.get('id')!r}"
     reason = blocked_reason_for_mode(mode)
     try:
         client.set_card_blocked(card_id, reason=reason)
@@ -336,12 +362,9 @@ def _post_ask_comment(
     """
     if not result_text or not str(result_text).strip():
         return "ask mode produced no result text to post as comment", True
-    if not isinstance(card, dict) or card.get("id") is None:
+    card_id = _card_numeric_id(card)
+    if card_id is None:
         return "ask mode requires card id from board card lookup to post comment", True
-    try:
-        card_id = int(card["id"])
-    except (TypeError, ValueError):
-        return f"ask mode got invalid card id: {card.get('id')!r}", True
     text = f"Cursor ask:\n\n{str(result_text).strip()}"
     try:
         client.add_comment(card_id, text)
