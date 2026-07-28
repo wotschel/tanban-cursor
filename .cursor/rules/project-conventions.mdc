@@ -1,0 +1,30 @@
+---
+description: tanban-cursor conventions — keep spec/docs in sync with behavior
+alwaysApply: true
+---
+
+# tanban-cursor project conventions
+
+## Documentation
+
+Normative behavior lives in `tanban-cursor-spec.md`. When behavior changes
+(webhooks, label dispatch, Cursor/TanBan integration, config, persistence,
+CLI, security), update in the **same change set**:
+
+- `tanban-cursor-spec.md` — normative product/API behavior (MUSS/SOLL/KANN)
+- `README.md` — if operators need different setup or run instructions
+
+Do not leave Spec/README stale relative to the implementation. If a change
+is intentionally out of scope for the current Soll, document it under
+„Bekannte Lücken“ in the Spec instead of silently drifting.
+
+## Language
+
+- **English:** code, log messages, CLI output, commit messages
+- **German:** chat with the user (proposals, questions, summaries)
+- Spec and README may stay German to match TanBan sibling docs
+
+## Architecture
+
+- Domain logic in `app/tanban-cursor/services/`
+- `routers/` and `manage.py` call services; do not duplicate dispatch/label rules there

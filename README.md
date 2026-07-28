@@ -64,11 +64,13 @@ TanBan signiert mit `X-TanBan-Signature: sha256=…` sowie
 ### Webhook in TanBan eintragen
 
 Beide Stacks teilen das Docker-Netzwerk `tanban-shared` (Alias `tanban-cursor`).
+TanBan-`compose.yaml` MUSS den App-Service an `shared` / `tanban-shared`
+hängen — sonst kann TanBan den Hostnamen `tanban-cursor` nicht auflösen.
 
 ```bash
 docker network create tanban-shared   # einmalig
 cd /opt/tanban
-docker compose up --detach --wait
+docker compose up --detach --wait     # nach compose-Änderung: recreate app
 docker compose exec app python manage.py webhook-create <board_id> \
   --name cursor-bridge \
   --url http://tanban-cursor:8000/webhooks/tanban
@@ -76,6 +78,9 @@ docker compose exec app python manage.py webhook-create <board_id> \
 ```
 
 Host-Cron auf TanBan weiter nutzen (`webhook-deliver`), damit Events ankommen.
+`webhook-deliver` mit `attempted=0` bedeutet nur „keine fälligen Jobs“ — Exit 0
+ist dann kein Beweis, dass die Bridge etwas empfangen hat. Ob Events
+ankommen: `docker compose logs -f app` in `tanban-cursor`.
 
 Logs der eingehenden Events:
 
