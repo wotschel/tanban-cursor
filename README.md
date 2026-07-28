@@ -32,6 +32,7 @@ Bei `card_created` und `card_labels_changed`:
 3. Card sperren mit Reason `cursor ask` / `cursor plan` / `cursor work`
 4. Wenn `CURSOR_ACTIVE=true` → Prompt an **Cursor Cloud** (`CURSOR_REPOSITORY`); sonst nur loggen
 5. Bei Mode **c-ask**: Agent-Antwort als Kommentar auf die Card
+6. Bei Mode **c-plan**: Plan als Card-Anhang `cursor-plan-<UTC-Zeitstempel>.md`
 
 Unrelated Label-Änderungen bei bereits gesetztem Mode lösen keinen neuen Run aus.
 Aktive Runs (`pending`/`running`) für dieselbe Card+Mode werden nicht verdoppelt.
@@ -47,7 +48,7 @@ TanBan-Keys und Webhook-Secrets sind **pro Board** — deshalb eine Map:
 
 | Variable | Zweck |
 |---|---|
-| `TANBAN_BASE_URL` | Basis-URL der TanBan-Instanz |
+| `TANBAN_BASE_URL` | Basis-URL der TanBan-Instanz (im Shared-Netz z. B. `http://tanban-app-1:8000`) |
 | `TANBAN_BOARDS` | JSON: `board.public_id` → `{board_id, api_key, webhook_secret}` |
 | `TANBAN_API_KEY` | Legacy Einzelboard: Board-API-Key (`tbk_…`, `read_write`) |
 | `TANBAN_BOARD_ID` | Legacy: numerische Board-ID |
@@ -118,6 +119,6 @@ cd /opt/tanban-cursor && docker compose logs -f app
 
 ## Nächste Schritte
 
-1. Ergebnis zurück nach TanBan auch für `c-plan` / `c-work` (Kommentar / Card-Update)
+1. Ergebnis zurück nach TanBan für `c-work` (Kommentar / Card-Update / Anhang)
 2. Labels `c-ask` / `c-plan` / `c-work` auf jedem gewünschten Board anlegen
 3. `CURSOR_API_KEY`, `CURSOR_REPOSITORY`, `TANBAN_BOARDS` in `.env` setzen

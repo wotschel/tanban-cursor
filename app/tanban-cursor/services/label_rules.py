@@ -193,7 +193,8 @@ def build_prompt(
     if mode == LABEL_PLAN:
         return (
             "Create a concrete implementation plan for this TanBan card. "
-            "Do not implement code yet; produce steps, risks, and suggested files.\n\n"
+            "Do not implement code yet; produce steps, risks, and suggested files. "
+            "The plan will be attached to the ticket as a Markdown file.\n\n"
             f"{card_block}"
         )
     return (

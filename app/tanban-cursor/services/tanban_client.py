@@ -25,16 +25,18 @@ class TanbanClient:
         self.api_key = api_key if api_key is not None else settings.tanban_api_key
         self.timeout = timeout
 
-    def _headers(self) -> dict[str, str]:
+    def _auth_headers(self, *, json_body: bool = False) -> dict[str, str]:
         if not self.api_key:
             raise TanbanClientError("TANBAN_API_KEY is not configured")
         if not self.base_url:
             raise TanbanClientError("TANBAN_BASE_URL is not configured")
-        return {
+        headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Accept": "application/json",
-            "Content-Type": "application/json",
         }
+        if json_body:
+            headers["Content-Type"] = "application/json"
+        return headers
 
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         return self._request("GET", path, params=params)
@@ -52,11 +54,20 @@ class TanbanClient:
         *,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
     ) -> Any:
         url = f"{self.base_url}{path if path.startswith('/') else '/' + path}"
+        headers = self._auth_headers(json_body=files is None)
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                response = client.request(method, url, headers=self._headers(), params=params, json=json)
+                response = client.request(
+                    method,
+                    url,
+                    headers=headers,
+                    params=params,
+                    json=json,
+                    files=files,
+                )
         except httpx.HTTPError as error:
             raise TanbanClientError(f"TanBan request failed: {error}") from error
         if response.status_code >= 400:
@@ -65,7 +76,6 @@ class TanbanClient:
         if response.status_code == 204 or not response.content:
             return None
         return response.json()
-
     def get_card(self, card_id: int) -> Any:
         return self.get(f"/api/cards/{card_id}")
 
@@ -92,6 +102,21 @@ class TanbanClient:
 
     def add_comment(self, card_id: int, text: str) -> Any:
         return self.post(f"/api/cards/{card_id}/comments", json={"text": text})
+
+    def upload_card_attachment(
+        self,
+        card_id: int,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str = "text/markdown",
+    ) -> Any:
+        """Upload a card attachment via multipart field ``file``."""
+        return self._request(
+            "POST",
+            f"/api/cards/{card_id}/attachments",
+            files={"file": (filename, content, content_type)},
+        )
 
     def set_card_blocked(self, card_id: int, *, reason: str) -> Any:
         return self.patch(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from services.cursor_client import CursorClient, CursorClientError
 from services.label_rules import (
     DISPATCH_EVENTS,
     LABEL_ASK,
+    LABEL_PLAN,
     LabelDecision,
     blocked_reason_for_mode,
     build_prompt,
@@ -309,6 +311,18 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
             logger.warning("ask comment failed delivery_id=%s: %s", delivery_id, comment_error)
             return LabelDecision(False, mode=decision.mode, reason=run.error)
 
+    if decision.mode == LABEL_PLAN:
+        attach_error, fatal = _post_plan_attachment(client, card=card, result_text=result.result_text)
+        if attach_error:
+            run.error = attach_error[:500]
+            if fatal:
+                run.status = "error"
+            run.updated_at = utc_now()
+            inbound_webhooks.mark_processed(db, row, error=run.error)
+            db.commit()
+            logger.warning("plan attachment failed delivery_id=%s: %s", delivery_id, attach_error)
+            return LabelDecision(False, mode=decision.mode, reason=run.error)
+
     inbound_webhooks.mark_processed(db, row)
     db.commit()
     logger.info(
@@ -370,5 +384,42 @@ def _post_ask_comment(
         client.add_comment(card_id, text)
     except TanbanClientError as error:
         return str(error), False
+    return None, False
+
+
+def plan_attachment_filename(*, when: datetime | None = None) -> str:
+    """Return ``cursor-plan-<UTC timestamp>.md`` for TanBan upload."""
+    stamp = (when or utc_now()).strftime("%Y%m%dT%H%M%SZ")
+    return f"cursor-plan-{stamp}.md"
+
+
+def _post_plan_attachment(
+    client: TanbanClient,
+    *,
+    card: dict[str, Any] | None,
+    result_text: str | None,
+) -> tuple[str | None, bool]:
+    """Upload plan result as a Markdown card attachment.
+
+    Returns ``(error_message_or_none, fatal)``. ``fatal`` means the run should be
+    marked ``error`` (missing text/card id); API upload failures keep Cursor status.
+    """
+    if not result_text or not str(result_text).strip():
+        return "plan mode produced no result text to attach", True
+    card_id = _card_numeric_id(card)
+    if card_id is None:
+        return "plan mode requires card id from board card lookup to upload attachment", True
+    filename = plan_attachment_filename()
+    content = str(result_text).strip().encode("utf-8")
+    try:
+        client.upload_card_attachment(
+            card_id,
+            filename=filename,
+            content=content,
+            content_type="text/markdown",
+        )
+    except TanbanClientError as error:
+        return str(error), False
+    logger.info("uploaded plan attachment card_id=%s filename=%s", card_id, filename)
     return None, False
 

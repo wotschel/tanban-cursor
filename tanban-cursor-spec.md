@@ -277,7 +277,11 @@ und in Prompt sowie Fingerprint einbeziehen.
    (`Cursor ask:\n\n…`). Fehlender Text oder fehlende Card-ID → fataler
    Fehler; reiner API-Post-Fehler behält den Cursor-Status und setzt
    `error`.
-8. Delivery als verarbeitet markieren.
+8. Nur bei Mode `c-plan`: Ergebnis als Card-Anhang hochladen
+   (`cursor-plan-<YYYYMMDDTHHMMSSZ>.md`, UTF-8 Markdown). Fehlender Text
+   oder fehlende Card-ID → fataler Fehler; reiner API-Upload-Fehler behält
+   den Cursor-Status und setzt `error`.
+9. Delivery als verarbeitet markieren.
 
 ### 6.6 Prompt-Inhalte
 
@@ -287,7 +291,7 @@ Checklist-Items enthalten.
 | Mode | Auftrag an den Agenten |
 |---|---|
 | `c-ask` | Frage beantworten; Code lesen erlaubt; keine Implementierung, kein Plan; Antwort wird als Kommentar gepostet |
-| `c-plan` | konkreten Implementierungsplan erzeugen; noch nicht implementieren |
+| `c-plan` | konkreten Implementierungsplan erzeugen; noch nicht implementieren; Ergebnis wird als Anhang gepostet |
 | `c-work` | Card im Repo umsetzen; fokussierter Diff; kurze Zusammenfassung |
 
 ## 7. Integrationen
@@ -299,7 +303,8 @@ Die Bridge SOLL mindestens können:
 - Card per Board-ID + `public_id` finden,
 - Kommentare und Checklist-Items einer Card laden,
 - Card blocken (`blocked` + Reason),
-- Kommentar an Card anhängen.
+- Kommentar an Card anhängen,
+- Datei-Anhang an Card hochladen (`POST /api/cards/{id}/attachments`).
 
 Authentifizierung über Bearer Board-API-Key (`TANBAN_API_KEY`).
 
@@ -363,8 +368,7 @@ Weitere Integrationstests KANNEN ergänzt werden.
 
 Diese Punkte sind bewusst noch nicht Soll der v1.0-Kernpflicht:
 
-1. Ergebnis zurück nach TanBan auch für `c-plan` / `c-work` (Kommentar oder
-   Card-Update).
+1. Ergebnis zurück nach TanBan für `c-work` (Kommentar, Card-Update oder Anhang).
 2. Explizites Unblock der Card nach Agent-Ende.
 3. Asynchrones Polling/Webhooks von Cursor-Läufen (heute: synchrone
    `prompt_once`-Semantik im Hintergrund-Task).
