@@ -1,0 +1,48 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+src = ["."]
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "UP",
+  "B",
+]
+ignore = [
+  "E501",
+  "B008",
+  "UP042",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "config",
+  "database",
+  "deps",
+  "models",
+  "routers",
+  "schemas",
+  "services",
+  "utc_datetime",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = [
+  "-p",
+  "no:cacheprovider",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = [
+  "migrations/*",
+  "tests/*",
+  "manage.py",
+]

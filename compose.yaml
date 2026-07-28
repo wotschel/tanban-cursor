@@ -1,0 +1,77 @@
+name: tanban-cursor
+
+services:
+  db:
+    image: mariadb:11.8.8
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-tanban_cursor}
+      MARIADB_USER: ${MARIADB_USER:-tanban_cursor}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?MARIADB_PASSWORD muss in .env gesetzt sein}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD muss in .env gesetzt sein}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - ./volumes/db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb --protocol=tcp --host=127.0.0.1 --user=root --password=$${MARIADB_ROOT_PASSWORD} --execute='SELECT 1' --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - backend
+
+  app:
+    build:
+      context: ./app/tanban-cursor
+      dockerfile: Dockerfile
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: mysql+pymysql://${MARIADB_USER:-tanban_cursor}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE:-tanban_cursor}?charset=utf8mb4
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY muss in .env gesetzt sein}
+      TANBAN_BASE_URL: ${TANBAN_BASE_URL:-}
+      TANBAN_API_KEY: ${TANBAN_API_KEY:-}
+      TANBAN_BOARD_ID: ${TANBAN_BOARD_ID:-}
+      TANBAN_WEBHOOK_SECRET: ${TANBAN_WEBHOOK_SECRET:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_MODEL: ${CURSOR_MODEL:-composer-2.5}
+      CURSOR_RUNTIME: ${CURSOR_RUNTIME:-cloud}
+      CURSOR_REPOSITORY: ${CURSOR_REPOSITORY:-}
+      ACTIVITY_LOG_PATH: /app/logs/activity.log
+    command:
+      - sh
+      - -c
+      - >-
+        alembic upgrade head &&
+        exec uvicorn main:app --host 0.0.0.0 --port 8000
+        --proxy-headers --forwarded-allow-ips='*'
+    ports:
+      - "127.0.0.1:${APP_PORT:-8100}:8000"
+    volumes:
+      - ./volumes/logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - frontend
+      - backend
+
+networks:
+  frontend:
+  backend:
+    internal: true
