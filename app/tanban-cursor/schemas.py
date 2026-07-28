@@ -19,6 +19,7 @@ class CursorAgentRunOut(BaseModel):
     id: int
     board_public_id: str | None = None
     card_public_id: str | None = None
+    title: str | None = None
     mode: str | None = None
     cursor_agent_id: str | None = None
     cursor_run_id: str | None = None

@@ -161,12 +161,15 @@ Pflichtfelder:
 - `status` (Default `pending`)
 - `created_at`, `updated_at`
 
-Optionale Felder: `board_public_id`, `card_public_id`, `mode`,
+Optionale Felder: `board_public_id`, `card_public_id`, `title`, `mode`,
 `content_hash`, `cursor_agent_id`, `cursor_run_id`, `prompt`, `result_text`,
 `error`, `source_delivery_id`.
 
 Bekannte Statuswerte: `pending`, `creating`, `running`, `finished`,
 `skipped`, `error` (sowie vom SDK gelieferte Endzustände).
+
+`title` ist der Kartentitel zum Startzeitpunkt (für Operator-UI/API; nicht
+Teil der Deduplizierung). Fehlender/leerer Titel wird als `null` gespeichert.
 
 `content_hash` ist der SHA-256-Fingerprint aus Mode + normalisiertem Titel +
 Beschreibung + Kommentartexten + Checklist-Einträgen (Text und Done-Status)

@@ -80,8 +80,10 @@ def cmd_run_list(args: argparse.Namespace) -> int:
             print("(no cursor agent runs)")
             return 0
         for row in rows:
+            title = (row.title or "").replace("\t", " ").strip() or "-"
             print(
-                f"{row.id}\t{row.status}\tmode={row.mode or '-'}\tcard={row.card_public_id or '-'}\t"
+                f"{row.id}\t{row.status}\tmode={row.mode or '-'}\t"
+                f"card={row.card_public_id or '-'}\ttitle={title}\t"
                 f"agent={row.cursor_agent_id or '-'}\trun={row.cursor_run_id or '-'}"
             )
     finally:

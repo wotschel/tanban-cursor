@@ -76,7 +76,7 @@ Unbekannte `board.public_id` in der Map → Webhook-Signatur **401**.
 | Methode | Pfad | Beschreibung |
 |---|---|---|
 | `GET` | `/health` | Healthcheck |
-| `GET` | `/runs?token=…` | Operator-UI: Agent-Runs (Status) |
+| `GET` | `/runs?token=…` | Operator-UI: Agent-Runs (Titel, Card-UUID, Status) |
 | `GET` | `/api/runs?token=…` | Dieselbe Liste als JSON |
 | `POST` | `/webhooks/tanban` | Empfang ausgehender TanBan-Board-Webhooks |
 

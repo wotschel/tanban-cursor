@@ -30,6 +30,7 @@ class CursorAgentRun(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     board_public_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     card_public_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     mode: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     cursor_agent_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)

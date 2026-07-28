@@ -237,6 +237,7 @@ def process_inbound_delivery(db: Session, delivery_id: str) -> LabelDecision | N
     run = CursorAgentRun(
         board_public_id=row.board_public_id,
         card_public_id=card_public_id,
+        title=title.strip()[:500] or None,
         mode=decision.mode,
         content_hash=content_hash,
         status="pending",

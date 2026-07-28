@@ -156,6 +156,7 @@ def _run_to_out(row) -> schemas.CursorAgentRunOut:
         id=row.id,
         board_public_id=row.board_public_id,
         card_public_id=row.card_public_id,
+        title=row.title,
         mode=row.mode,
         cursor_agent_id=row.cursor_agent_id,
         cursor_run_id=row.cursor_run_id,
@@ -199,6 +200,7 @@ def runs_page(
         cells.append(
             f"""<tr>
               <td class="mono"><a href="/runs/{row.id}?{q}">{row.id}</a></td>
+              <td>{_esc(row.title)}</td>
               <td><span class="badge {_status_class(row.status)}">{_esc(row.status)}</span></td>
               <td class="mono">{_esc(row.mode)}</td>
               <td class="mono">{_esc(row.card_public_id)}</td>
@@ -214,7 +216,7 @@ def runs_page(
     <table>
       <thead>
         <tr>
-          <th>ID</th><th>Status</th><th>Mode</th><th>Card</th>
+          <th>ID</th><th>Title</th><th>Status</th><th>Mode</th><th>Card UUID</th>
           <th>Agent</th><th>Updated</th><th>Error</th>
         </tr>
       </thead>
@@ -247,16 +249,18 @@ def run_detail_page(
     if row is None:
         raise HTTPException(status_code=404, detail="Run not found")
     q = _token_query(token)
+    heading = (row.title or "").strip() or f"Run #{row.id}"
     body = f"""
     <div class="nav"><a href="/runs?{q}">← Runs</a> · <a href="/api/runs/{run_id}?{q}">JSON</a></div>
-    <h1>Run #{row.id}</h1>
-    <p class="sub"><span class="badge {_status_class(row.status)}">{_esc(row.status)}</span>
+    <h1>{_esc(heading)}</h1>
+    <p class="sub">Run #{row.id} · <span class="badge {_status_class(row.status)}">{_esc(row.status)}</span>
       · mode {_esc(row.mode)}</p>
     <dl class="meta">
-      <dt>Board</dt><dd class="mono">{_esc(row.board_public_id)}</dd>
-      <dt>Card</dt><dd class="mono">{_esc(row.card_public_id)}</dd>
+      <dt>Title</dt><dd>{_esc(row.title)}</dd>
+      <dt>Board UUID</dt><dd class="mono">{_esc(row.board_public_id)}</dd>
+      <dt>Card UUID</dt><dd class="mono">{_esc(row.card_public_id)}</dd>
       <dt>Agent</dt><dd class="mono">{_esc(row.cursor_agent_id)}</dd>
-      <dt>Run</dt><dd class="mono">{_esc(row.cursor_run_id)}</dd>
+      <dt>Cursor run</dt><dd class="mono">{_esc(row.cursor_run_id)}</dd>
       <dt>Delivery</dt><dd class="mono">{_esc(row.source_delivery_id)}</dd>
       <dt>Content hash</dt><dd class="mono">{_esc(row.content_hash)}</dd>
       <dt>Created</dt><dd class="mono">{_esc(_fmt_dt(row.created_at))}</dd>
